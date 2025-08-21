@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { HashRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
+const { HashRouter, NavLink, Route, Routes, useLocation } = ReactRouterDOM;
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 

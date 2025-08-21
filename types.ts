@@ -44,6 +44,7 @@ export interface VendorSuggestion {
     priceRange: string; // "₹100-1000"
     rating: number;
     productQuery: string; // e.g., "smartwatch"
+    customerCare?: string;
 }
 
 export interface ActivityRecommendation {
@@ -116,6 +117,7 @@ export interface VendorProductCartItem extends CartItemBase {
     price: number;
     quantity: number;
     imageUrl?: string;
+    customerCare?: string;
 }
 
 

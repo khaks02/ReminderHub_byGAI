@@ -1,19 +1,21 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { VendorProductCartItem } from '../types';
+import { VendorProductCartItem, VendorSuggestion } from '../types';
 
 interface VendorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    vendor: string;
-    onAddToCart: (item: Omit<VendorProductCartItem, 'id' | 'type'>) => void;
-    productQuery?: string;
+    vendorSuggestion: VendorSuggestion | null;
+    onAddToCart: (item: Omit<VendorProductCartItem, 'id' | 'type' | 'customerCare'>) => void;
 }
 
-const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendor, onAddToCart, productQuery = '' }) => {
+const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendorSuggestion, onAddToCart }) => {
     const [productName, setProductName] = useState('');
     const [price, setPrice] = useState('');
+
+    const vendorName = vendorSuggestion?.name || '';
+    const productQuery = vendorSuggestion?.productQuery || '';
 
     useEffect(() => {
         if (!isOpen) {
@@ -41,11 +43,11 @@ const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendor, onAd
     };
     
     const getVendorUrl = () => {
-        const urlBuilder = vendorUrlMap[vendor];
+        const urlBuilder = vendorUrlMap[vendorName];
         if (urlBuilder) {
             return urlBuilder(productQuery);
         }
-        return `https://www.google.com/search?q=${encodeURIComponent(vendor + ' ' + productQuery)}`;
+        return `https://www.google.com/search?q=${encodeURIComponent(vendorName + ' ' + productQuery)}`;
     };
 
     const handleAddToCart = () => {
@@ -55,7 +57,7 @@ const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendor, onAd
         }
         const newItem = {
             productName,
-            vendor,
+            vendor: vendorName,
             price: parseFloat(price),
             quantity: 1,
             imageUrl: `https://picsum.photos/seed/${productName.replace(/\W/g, '')}/100/100`
@@ -67,12 +69,12 @@ const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendor, onAd
     };
     
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Shop on ${vendor}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`Shop on ${vendorName}`}>
             <div className="flex flex-col h-[75vh]">
                  <div className="p-2 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200 rounded-md text-xs mb-4">
                     <strong>Demo Notice:</strong> Many sites block being embedded. This is a simulation. Use the form below to add items to your cart.
                 </div>
-                <iframe src={getVendorUrl()} title={vendor} className="flex-grow w-full border border-gray-300 dark:border-slate-600 rounded-md"></iframe>
+                <iframe src={getVendorUrl()} title={vendorName} className="flex-grow w-full border border-gray-300 dark:border-slate-600 rounded-md"></iframe>
                 <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
                     <h3 className="font-bold mb-2">Add item to ReminderHub Cart</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link } from 'lucide-react';
+import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link, Headset } from 'lucide-react';
 import { CartItem, CartItemType } from '../types';
 
 const OrdersPage: React.FC = () => {
@@ -72,10 +72,18 @@ const OrdersPage: React.FC = () => {
                                 <h3 className="font-semibold mb-3">Items</h3>
                                 <ul className="space-y-3">
                                     {order.items.map(item => (
-                                        <li key={item.id} className="flex items-center gap-3 text-sm">
-                                            {getItemIcon(item)}
-                                            <span className="flex-grow">{getItemName(item)}</span>
-                                            {'quantity' in item && <span className="text-gray-500 dark:text-gray-400">Qty: {item.quantity}</span>}
+                                        <li key={item.id} className="flex flex-col">
+                                            <div className="flex items-center gap-3 text-sm w-full">
+                                                {getItemIcon(item)}
+                                                <span className="flex-grow">{getItemName(item)}</span>
+                                                {'quantity' in item && <span className="text-gray-500 dark:text-gray-400">Qty: {item.quantity}</span>}
+                                            </div>
+                                            {item.type === CartItemType.VENDOR_PRODUCT && item.customerCare && (
+                                                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1 pl-8 self-start">
+                                                    <Headset size={14} />
+                                                    <span>Customer Care: {item.customerCare}</span>
+                                                </div>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>

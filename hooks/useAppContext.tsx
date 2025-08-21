@@ -1,7 +1,7 @@
-
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem } from '../types';
 import { INITIAL_REMINDERS, INITIAL_REMINDER_TYPES } from '../constants';
+import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -32,27 +32,51 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [reminderTypes, setReminderTypes] = useState<ReminderType[]>(INITIAL_REMINDER_TYPES);
     const [orders, setOrders] = useState<Order[]>([]);
 
+    useEffect(() => {
+        // On initial app load, request permission for notifications
+        requestNotificationPermission();
+        // And schedule notifications for all existing reminders
+        reminders.forEach(scheduleNotificationsForReminder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
     const addReminder = (reminder: Reminder) => {
-        setReminders(prev => [reminder, ...prev].sort((a, b) => a.date.getTime() - b.date.getTime()));
+        setReminders(prev => {
+            const newReminders = [reminder, ...prev].sort((a, b) => a.date.getTime() - b.date.getTime());
+            scheduleNotificationsForReminder(reminder);
+            return newReminders;
+        });
     };
 
     const deleteReminder = (id: string) => {
         setReminders(prev => prev.filter(r => r.id !== id));
+        cancelNotificationsForReminder(id);
     };
 
     const updateReminder = (id: string, updates: Partial<Reminder>) => {
-        setReminders(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r).sort((a,b) => a.date.getTime() - b.date.getTime()));
+        setReminders(prev => {
+            const updatedReminders = prev.map(r => r.id === id ? { ...r, ...updates } : r).sort((a,b) => a.date.getTime() - b.date.getTime());
+            const updatedReminder = updatedReminders.find(r => r.id === id);
+            if (updatedReminder) {
+                scheduleNotificationsForReminder(updatedReminder);
+            }
+            return updatedReminders;
+        });
     };
 
     const completeReminder = (id: string) => {
         const reminder = reminders.find(r => r.id === id);
         if (!reminder) return;
 
+        cancelNotificationsForReminder(id); // Always cancel old notifications
+
         if (reminder.recurrenceRule) {
             const newDate = calculateNextOccurrence(reminder.date, reminder.recurrenceRule);
+            // updateReminder will handle rescheduling the new notifications
             updateReminder(id, { date: newDate });
         } else {
+            // isCompleted state will prevent notifications from being scheduled
             updateReminder(id, { isCompleted: true });
         }
     };

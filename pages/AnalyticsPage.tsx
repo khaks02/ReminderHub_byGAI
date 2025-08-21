@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+// import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const reminderData = [
     { name: 'Birthday', count: 4 },
@@ -27,37 +27,15 @@ const AnalyticsPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
                     <h2 className="text-xl font-semibold mb-4">Reminder Types Breakdown</h2>
-                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reminderData}>
-                            <XAxis dataKey="name" stroke="rgb(100 116 139)" />
-                            <YAxis stroke="rgb(100 116 139)" />
-                            <Tooltip wrapperClassName="!bg-slate-700 !border-slate-600" />
-                            <Legend />
-                            <Bar dataKey="count" fill="rgb(99 102 241)" />
-                        </BarChart>
-                    </ResponsiveContainer>
+                     <div className="w-full h-[300px] flex items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-md">
+                        <p className="text-gray-500">Chart rendering is temporarily disabled due to library incompatibility.</p>
+                    </div>
                 </div>
                 <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
                     <h2 className="text-xl font-semibold mb-4">Recommended Service Usage</h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={serviceData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                outerRadius={100}
-                                fill="#8884d8"
-                                dataKey="value"
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            >
-                                {serviceData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip wrapperClassName="!bg-slate-700 !border-slate-600" />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    <div className="w-full h-[300px] flex items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-md">
+                        <p className="text-gray-500">Chart rendering is temporarily disabled due to library incompatibility.</p>
+                    </div>
                 </div>
             </div>
              <div className="mt-8 p-10 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-300 dark:border-slate-700">

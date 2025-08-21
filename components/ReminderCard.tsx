@@ -1,12 +1,13 @@
+
 import React, { useState, useCallback } from 'react';
-import { Reminder, ActivityRecommendation } from '../types';
+import { Reminder, ActivityRecommendation, VendorSuggestion } from '../types';
 import { getServiceRecommendations, searchForServices } from '../services/geminiService';
 import { ChevronDown, Zap, Clock, MoreVertical, Edit, Trash2, Repeat, CheckSquare, Star, ExternalLink, ShoppingCart, Search, Loader } from 'lucide-react';
 import Spinner from './Spinner';
 
 interface ReminderCardProps {
     reminder: Reminder;
-    onVendorSelect: (vendor: string, productQuery: string, reminder: Reminder) => void;
+    onVendorSelect: (vendor: VendorSuggestion, reminder: Reminder) => void;
     onEdit: (reminder: Reminder) => void;
     onDelete: (id: string) => void;
     onSnooze: (id: string, days: number) => void;
@@ -197,7 +198,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                                                             <ExternalLink size={16} />
                                                         </a>
                                                         <button 
-                                                            onClick={() => onVendorSelect(vendor.name, vendor.productQuery, reminder)}
+                                                            onClick={() => onVendorSelect(vendor, reminder)}
                                                             className="flex items-center gap-2 text-sm font-semibold bg-white dark:bg-slate-800 px-3 py-1.5 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-900 transition-colors"
                                                         >
                                                             <ShoppingCart size={16} />

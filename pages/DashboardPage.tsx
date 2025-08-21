@@ -8,24 +8,28 @@ import Toast from '../components/Toast';
 import EditReminderModal from '../components/EditReminderModal';
 import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
-import { Reminder, VendorProductCartItem, CartItemType } from '../types';
+import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion } from '../types';
 import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram } from 'lucide-react';
 import { INITIAL_SUGGESTIONS } from '../constants';
-import { NavLink } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
+const { NavLink } = ReactRouterDOM;
 
 const DashboardPage: React.FC = () => {
     const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+    const [reminderModalState, setReminderModalState] = useState<{
+        isOpen: boolean;
+        mode: 'create' | 'edit';
+        initialData: Partial<Reminder>;
+    }>({ isOpen: false, mode: 'create', initialData: {} });
     const [completionCandidate, setCompletionCandidate] = useState<Reminder | null>(null);
     const [vendorModal, setVendorModal] = useState<{
         isOpen: boolean;
-        vendor: string;
-        productQuery?: string;
+        vendorSuggestion: VendorSuggestion | null;
         reminderContext?: { id: string, title: string };
-    }>({ isOpen: false, vendor: '' });
+    }>({ isOpen: false, vendorSuggestion: null });
     
     const [currentDate, setCurrentDate] = useState(new Date());
     const [suggestions, setSuggestions] = useState(INITIAL_SUGGESTIONS.map(s => ({...s, id: `sug-${Math.random()}`})));
@@ -35,11 +39,13 @@ const DashboardPage: React.FC = () => {
     const remindersByDate = useMemo(() => {
         const map = new Map<string, Reminder[]>();
         reminders.forEach(reminder => {
-            const key = reminder.date.toISOString().split('T')[0];
-            if (!map.has(key)) {
-                map.set(key, []);
+            if (reminder.date) {
+                const key = reminder.date.toISOString().split('T')[0];
+                if (!map.has(key)) {
+                    map.set(key, []);
+                }
+                map.get(key)!.push(reminder);
             }
-            map.get(key)!.push(reminder);
         });
         return map;
     }, [reminders]);
@@ -49,37 +55,56 @@ const DashboardPage: React.FC = () => {
         setError(null);
         try {
             const newReminderData = await analyzeReminder(prompt);
-            if (newReminderData.type && !reminderTypes.some(t => t.toLowerCase() === newReminderData.type.toLowerCase())) {
-                addReminderType(newReminderData.type);
+            
+            if (!newReminderData.title || !newReminderData.date) {
+                setReminderModalState({
+                    isOpen: true,
+                    mode: 'create',
+                    initialData: {
+                        ...newReminderData,
+                        description: newReminderData.description || (newReminderData.title ? '' : prompt),
+                        title: newReminderData.title || ''
+                    }
+                });
+            } else {
+                if (newReminderData.type && !reminderTypes.some(t => t.toLowerCase() === newReminderData.type.toLowerCase())) {
+                    addReminderType(newReminderData.type);
+                }
+                const reminder = { ...newReminderData, id: `rem-${Date.now()}` } as Reminder;
+                addReminder(reminder);
+                setToast({ message: "Reminder created successfully!", type: 'success' });
             }
-            const reminder = { ...newReminderData, id: `rem-${Date.now()}` };
-            addReminder(reminder);
-            setToast({ message: "Reminder created successfully!", type: 'success' });
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
             setError(errorMessage);
             setToast({ message: `Error: ${errorMessage}`, type: 'error' });
+            setReminderModalState({
+                isOpen: true,
+                mode: 'create',
+                initialData: { title: prompt }
+            });
         } finally {
             setIsLoading(false);
         }
     }, [addReminder, addReminderType, reminderTypes]);
 
-    const handleVendorSelect = (vendor: string, productQuery: string, reminder: Reminder) => {
+
+    const handleVendorSelect = (vendor: VendorSuggestion, reminder: Reminder) => {
         setVendorModal({ 
             isOpen: true, 
-            vendor, 
-            productQuery,
+            vendorSuggestion: vendor,
             reminderContext: { id: reminder.id, title: reminder.title },
         });
     };
 
-    const handleAddToCartFromVendor = (item: Omit<VendorProductCartItem, 'id' | 'type'>) => {
+    const handleAddToCartFromVendor = (item: Omit<VendorProductCartItem, 'id' | 'type' | 'customerCare'>) => {
         const newCartItem: VendorProductCartItem = {
             ...item,
             id: `vendor-${item.vendor}-${Date.now()}`,
             type: CartItemType.VENDOR_PRODUCT,
             reminderId: vendorModal.reminderContext?.id,
             reminderTitle: vendorModal.reminderContext?.title,
+            customerCare: vendorModal.vendorSuggestion?.customerCare,
         };
         addToCart(newCartItem);
         setToast({ message: `${item.productName} added to cart!`, type: 'success' });
@@ -102,13 +127,31 @@ const DashboardPage: React.FC = () => {
         }
     };
     
-    const handleUpdateReminder = (id: string, updates: Partial<Reminder>) => {
-        if (updates.type && !reminderTypes.some(t => t.toLowerCase() === updates.type!.toLowerCase())) {
-            addReminderType(updates.type);
+    const handleSaveReminder = (data: Partial<Reminder>) => {
+        const { mode, initialData } = reminderModalState;
+
+        if (data.type && !reminderTypes.some(t => t.toLowerCase() === data.type!.toLowerCase())) {
+            addReminderType(data.type);
         }
-        updateReminder(id, updates);
-        setEditingReminder(null);
-        setToast({ message: "Reminder updated successfully!", type: 'success' });
+
+        if (mode === 'edit' && initialData.id) {
+            updateReminder(initialData.id, data);
+            setToast({ message: "Reminder updated!", type: 'success' });
+        } else {
+            const newReminder: Reminder = {
+                id: `rem-${Date.now()}`,
+                title: data.title || 'Untitled Reminder',
+                date: data.date || new Date(),
+                type: data.type || 'General',
+                description: data.description || '',
+                recurrenceRule: data.recurrenceRule,
+                isCompleted: false,
+            };
+            addReminder(newReminder);
+            setToast({ message: "Reminder created!", type: 'success' });
+        }
+        
+        setReminderModalState({ isOpen: false, mode: 'create', initialData: {} });
     };
 
     const handleComplete = (reminder: Reminder) => {
@@ -130,7 +173,7 @@ const DashboardPage: React.FC = () => {
 
     const handleConfirmAndEdit = () => {
          if (completionCandidate) {
-            setEditingReminder(completionCandidate);
+            setReminderModalState({ isOpen: true, mode: 'edit', initialData: completionCandidate });
             setCompletionCandidate(null);
         }
     };
@@ -171,11 +214,22 @@ const DashboardPage: React.FC = () => {
             const isToday = date.toDateString() === new Date().toDateString();
             
             days.push(
-                <div key={dateKey} className="border-r border-b border-gray-200 dark:border-slate-700 p-2 min-h-28 relative">
+                <div 
+                    key={dateKey} 
+                    className="border-r border-b border-gray-200 dark:border-slate-700 p-2 min-h-28 relative group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                    onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date } })}
+                >
                     <span className={`font-semibold ${isToday ? 'bg-primary text-white rounded-full flex items-center justify-center w-7 h-7' : ''}`}>{day}</span>
                     <div className="mt-1 space-y-1">
                         {dayReminders.map(r => (
-                            <div key={r.id} onClick={() => setEditingReminder(r)} className={`text-xs p-1 rounded-md cursor-pointer truncate ${r.isCompleted ? 'bg-green-100 dark:bg-green-900/50 line-through text-gray-500' : 'bg-blue-100 dark:bg-blue-900/50'}`}>
+                            <div 
+                                key={r.id}
+                                onClick={(e) => {
+                                    e.stopPropagation(); // Prevent cell's onClick from firing
+                                    setReminderModalState({ isOpen: true, mode: 'edit', initialData: r });
+                                }}
+                                className={`text-xs p-1 rounded-md cursor-pointer truncate ${r.isCompleted ? 'bg-green-100 dark:bg-green-900/50 line-through text-gray-500' : 'bg-blue-100 dark:bg-blue-900/50'}`}
+                            >
                                 {r.title}
                             </div>
                         ))}
@@ -204,11 +258,13 @@ const DashboardPage: React.FC = () => {
     return (
         <div className="container mx-auto">
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-             {editingReminder && (
+             {reminderModalState.isOpen && (
                 <EditReminderModal
-                    reminder={editingReminder}
-                    onClose={() => setEditingReminder(null)}
-                    onSave={handleUpdateReminder}
+                    isOpen={reminderModalState.isOpen}
+                    mode={reminderModalState.mode}
+                    initialData={reminderModalState.initialData}
+                    onClose={() => setReminderModalState({ ...reminderModalState, isOpen: false })}
+                    onSave={handleSaveReminder}
                 />
              )}
              {completionCandidate && (
@@ -223,9 +279,8 @@ const DashboardPage: React.FC = () => {
              {vendorModal.isOpen && (
                 <VendorModal
                     isOpen={vendorModal.isOpen}
-                    onClose={() => setVendorModal({isOpen: false, vendor: ''})}
-                    vendor={vendorModal.vendor}
-                    productQuery={vendorModal.productQuery}
+                    onClose={() => setVendorModal({isOpen: false, vendorSuggestion: null})}
+                    vendorSuggestion={vendorModal.vendorSuggestion}
                     onAddToCart={handleAddToCartFromVendor}
                 />
             )}
@@ -312,7 +367,7 @@ const DashboardPage: React.FC = () => {
                                 key={reminder.id} 
                                 reminder={reminder} 
                                 onVendorSelect={handleVendorSelect}
-                                onEdit={setEditingReminder}
+                                onEdit={(r) => setReminderModalState({ isOpen: true, mode: 'edit', initialData: r })}
                                 onDelete={handleDelete}
                                 onSnooze={handleSnooze}
                                 onComplete={handleComplete}

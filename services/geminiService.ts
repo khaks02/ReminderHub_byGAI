@@ -4,20 +4,20 @@ import { Reminder, ReminderType, Service, Recipe, RecurrenceRule, ActivityRecomm
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const analyzeReminder = async (prompt: string): Promise<Omit<Reminder, 'id'>> => {
+export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. Request: "${prompt}"`,
+            contents: `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. If a field like title or date cannot be determined, omit it from the JSON response. Request: "${prompt}"`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                        title: { type: Type.STRING },
-                        date: { type: Type.STRING, description: "Inferred date in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)" },
+                        title: { type: Type.STRING, description: "The title of the reminder. Omit if not clear." },
+                        date: { type: Type.STRING, description: "Inferred date in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ). Omit if not clear." },
                         type: { type: Type.STRING, description: "A category for the reminder, e.g., 'Birthday', 'Meeting', 'Personal Goal'." },
-                        description: { type: Type.STRING },
+                        description: { type: Type.STRING, description: "A detailed description." },
                         recurrenceRule: { 
                             type: Type.OBJECT,
                             nullable: true,
@@ -27,7 +27,7 @@ export const analyzeReminder = async (prompt: string): Promise<Omit<Reminder, 'i
                             }
                         }
                     },
-                    required: ["title", "date", "type", "description"]
+                    required: ["type", "description"]
                 }
             }
         });
@@ -37,14 +37,15 @@ export const analyzeReminder = async (prompt: string): Promise<Omit<Reminder, 'i
 
         return {
             title: parsed.title,
-            date: new Date(parsed.date),
+            date: parsed.date ? new Date(parsed.date) : undefined,
             type: parsed.type as ReminderType,
             description: parsed.description,
             recurrenceRule: parsed.recurrenceRule || null
         };
     } catch (error) {
         console.error("Error analyzing reminder:", error);
-        throw new Error("Failed to analyze reminder with AI.");
+        // On failure, return a partial object. The dashboard will open the modal for completion.
+        return { description: prompt };
     }
 };
 
@@ -56,21 +57,21 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
 1. Identify 1-2 distinct activities a user might need to perform (e.g., 'Buy a Gift', 'Book a Doctor Appointment').
 2. For each activity, brainstorm a single, generic but searchable product or service query. Example: for 'Buy a Gift' for a birthday, the query could be 'birthday gifts'. For 'Dentist Appointment', it could be 'dental clinics nearby'.
 3. For each activity and its corresponding query, find 2-3 popular Indian vendors that provide this product/service.
-4. For each vendor, provide: their name, a short description, a realistic price range in INR (as a string like "₹100-1000"), a rating out of 5, and the product query from step 2.
+4. For each vendor, provide: their name, a short description, a realistic price range in INR (as a string like "₹100-1000"), a rating out of 5, the product query from step 2, and a customer care contact (phone or email if available).
 
 Example for 'Alice's Birthday':
 [
   {
     "activity": "Online Gift Stores",
     "vendors": [
-      { "name": "Amazon", "description": "Wide range of gifts and electronics.", "priceRange": "₹500-10000", "rating": 4.6, "productQuery": "birthday gifts for friend" },
-      { "name": "Ferns N Petals", "description": "Flowers, cakes, and personalized gifts.", "priceRange": "₹800-3000", "rating": 4.3, "productQuery": "birthday flowers and cake" }
+      { "name": "Amazon", "description": "Wide range of gifts and electronics.", "priceRange": "₹500-10000", "rating": 4.6, "productQuery": "birthday gifts for friend", "customerCare": "1800-3000-9009" },
+      { "name": "Ferns N Petals", "description": "Flowers, cakes, and personalized gifts.", "priceRange": "₹800-3000", "rating": 4.3, "productQuery": "birthday flowers and cake", "customerCare": "support@fnp.com" }
     ]
   },
   {
     "activity": "Online Cake Delivery",
     "vendors": [
-      { "name": "Zomato", "description": "Order from local bakeries.", "priceRange": "₹700-2000", "rating": 4.4, "productQuery": "birthday cake delivery" }
+      { "name": "Zomato", "description": "Order from local bakeries.", "priceRange": "₹700-2000", "rating": 4.4, "productQuery": "birthday cake delivery", "customerCare": "support@zomato.com" }
     ]
   }
 ]`,
@@ -91,7 +92,8 @@ Example for 'Alice's Birthday':
                                         description: { type: Type.STRING },
                                         priceRange: { type: Type.STRING },
                                         rating: { type: Type.NUMBER },
-                                        productQuery: { type: Type.STRING }
+                                        productQuery: { type: Type.STRING },
+                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
                                     },
                                     required: ["name", "description", "priceRange", "rating", "productQuery"]
                                 }
@@ -110,19 +112,19 @@ Example for 'Alice's Birthday':
          if (reminder.type.toLowerCase().includes('birthday')) {
              return [
                 { activity: 'Online Gift Stores', vendors: [
-                    { name: 'Amazon', description: 'Gifts, electronics, and more.', priceRange: '₹500-5000', rating: 4.5, productQuery: 'birthday gifts'},
-                    { name: 'Myntra', description: 'Fashion and lifestyle gifts.', priceRange: '₹1000-4000', rating: 4.3, productQuery: 'gift cards'},
+                    { name: 'Amazon', description: 'Gifts, electronics, and more.', priceRange: '₹500-5000', rating: 4.5, productQuery: 'birthday gifts', customerCare: '1800-3000-9009' },
+                    { name: 'Myntra', description: 'Fashion and lifestyle gifts.', priceRange: '₹1000-4000', rating: 4.3, productQuery: 'gift cards', customerCare: '080-6156-1999' },
                 ]},
                 { activity: 'Online Cake Delivery', vendors: [
-                    { name: 'Swiggy', description: 'Cakes from nearby bakeries.', priceRange: '₹600-1500', rating: 4.4, productQuery: 'birthday cake'},
+                    { name: 'Swiggy', description: 'Cakes from nearby bakeries.', priceRange: '₹600-1500', rating: 4.4, productQuery: 'birthday cake', customerCare: 'support@swiggy.in' },
                 ]}
             ];
         }
          if (reminder.type.toLowerCase().includes('appointment')) {
              return [
                 { activity: 'Book Doctor Appointments', vendors: [
-                    { name: 'Practo', description: 'Find doctors and book appointments.', priceRange: '₹300-1500', rating: 4.6, productQuery: 'dentist appointment'},
-                    { name: 'Apollo 24/7', description: 'Consult with doctors online.', priceRange: '₹400-1000', rating: 4.4, productQuery: 'online doctor consultation'},
+                    { name: 'Practo', description: 'Find doctors and book appointments.', priceRange: '₹300-1500', rating: 4.6, productQuery: 'dentist appointment', customerCare: 'support@practo.com' },
+                    { name: 'Apollo 24/7', description: 'Consult with doctors online.', priceRange: '₹400-1000', rating: 4.4, productQuery: 'online doctor consultation', customerCare: '1860-500-0101' },
                 ]},
             ];
         }
@@ -137,7 +139,7 @@ export const searchForServices = async (reminder: Reminder, query: string): Prom
             contents: `A user has a reminder titled "${reminder.title}" and is searching for services related to "${query}".
 1. Create a single activity category based on the user's search. e.g., if they search for "pizza", the activity could be "Pizza Delivery".
 2. Find 2-3 popular Indian vendors that match this search.
-3. For each vendor, provide their name, a short description, a realistic price range in INR, a rating out of 5, and use the user's original query ("${query}") as the productQuery.
+3. For each vendor, provide their name, a short description, a realistic price range in INR, a rating out of 5, the user's original query ("${query}") as the productQuery, and a customer care contact.
 4. Return the result in the same JSON format as the initial recommendations.`,
             config: {
                 responseMimeType: "application/json",
@@ -156,7 +158,8 @@ export const searchForServices = async (reminder: Reminder, query: string): Prom
                                         description: { type: Type.STRING },
                                         priceRange: { type: Type.STRING },
                                         rating: { type: Type.NUMBER },
-                                        productQuery: { type: Type.STRING }
+                                        productQuery: { type: Type.STRING },
+                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
                                     },
                                     required: ["name", "description", "priceRange", "rating", "productQuery"]
                                 }
@@ -174,7 +177,7 @@ export const searchForServices = async (reminder: Reminder, query: string): Prom
         console.error("Error searching for services:", error);
         return [
              { activity: `Results for "${query}"`, vendors: [
-                { name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: query},
+                { name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: query, customerCare: 'N/A' },
             ]}
         ];
     }
