@@ -1,0 +1,6 @@
+{
+  "name": "ReminderHub AI",
+  "description": "An intelligent calendar-based reminder app. It centralizes events from various calendars, understands reminders via AI, and provides relevant service recommendations for events like birthdays, meetings, or renewals. It also features an AI-powered recipe discovery section.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

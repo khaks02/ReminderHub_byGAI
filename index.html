@@ -1,0 +1,52 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReminderHub AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: 'hsl(210, 40%, 50%)',
+                light: 'hsl(210, 40%, 60%)',
+                dark: 'hsl(210, 40%, 40%)',
+              },
+              bkg: {
+                light: 'hsl(210, 20%, 98%)',
+                dark: 'hsl(220, 20%, 10%)',
+              },
+              content: {
+                light: 'hsl(220, 15%, 20%)',
+                dark: 'hsl(210, 20%, 95%)',
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.12.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.7.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.536.0",
+    "recharts": "https://esm.sh/recharts@^3.1.2"
+  }
+}
+</script>
+</head>
+  <body class="bg-bkg-light dark:bg-bkg-dark text-content-light dark:text-content-dark">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
