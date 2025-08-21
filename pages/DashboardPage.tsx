@@ -122,10 +122,8 @@ const DashboardPage: React.FC = () => {
     };
 
     const handleDelete = (id: string) => {
-        if (window.confirm("Are you sure you want to delete this reminder?")) {
-            deleteReminder(id);
-            setToast({ message: "Reminder deleted.", type: 'success' });
-        }
+        deleteReminder(id);
+        setToast({ message: "Reminder deleted.", type: 'success' });
     };
     
     const handleSnooze = (id: string, days: number) => {
@@ -320,6 +318,13 @@ const DashboardPage: React.FC = () => {
                     initialData={reminderModalState.initialData}
                     onClose={() => setReminderModalState({ ...reminderModalState, isOpen: false })}
                     onSave={handleSaveReminder}
+                    onDelete={(id) => {
+                        if (window.confirm("Are you sure?")) {
+                            handleDelete(id);
+                        }
+                    }}
+                    onComplete={handleComplete}
+                    onSnooze={handleSnooze}
                 />
              )}
              {completionCandidate && (

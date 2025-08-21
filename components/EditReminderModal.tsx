@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Reminder, RecurrenceRule } from '../types';
 import Modal from './Modal';
 import { useAppContext } from '../hooks/useAppContext';
-import { Tag, Calendar, MessageSquare, Check } from 'lucide-react';
+import { Tag, Calendar, MessageSquare, Check, Trash2, Clock, CheckSquare as CheckSquareIcon } from 'lucide-react';
 
 const labelStyle = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2";
 const inputStyle = "w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2.5 text-content-light dark:text-content-dark placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition-colors";
@@ -15,6 +15,9 @@ interface ReminderFormModalProps {
     initialData: Partial<Reminder>;
     onClose: () => void;
     onSave: (data: Partial<Reminder>) => void;
+    onDelete?: (id: string) => void;
+    onComplete?: (reminder: Reminder) => void;
+    onSnooze?: (id: string, days: number) => void;
 }
 
 const InputField = ({ icon, children }: { icon: React.ReactNode, children: React.ReactNode }) => (
@@ -37,7 +40,7 @@ const RecurrenceButton = ({ label, isActive, onClick }: { label: string, isActiv
 );
 
 
-const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, initialData, onClose, onSave }) => {
+const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, initialData, onClose, onSave, onDelete, onComplete, onSnooze }) => {
     const { reminderTypes } = useAppContext();
     const [formData, setFormData] = useState<Partial<Reminder>>({});
     const [showCustomRecurrence, setShowCustomRecurrence] = useState(false);
@@ -90,6 +93,27 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
         e.preventDefault();
         if (validate()) {
             onSave(formData);
+        }
+    };
+
+    const handleDelete = () => {
+        if (onDelete && initialData.id && window.confirm("Are you sure you want to delete this reminder?")) {
+            onDelete(initialData.id);
+            onClose();
+        }
+    };
+
+    const handleComplete = () => {
+        if (onComplete && initialData.id) {
+            onComplete(initialData as Reminder);
+            onClose();
+        }
+    };
+
+    const handleSnooze = () => {
+        if (onSnooze && initialData.id) {
+            onSnooze(initialData.id, 1);
+            onClose();
         }
     };
     
@@ -181,9 +205,26 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
                     )}
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
-                    <button type="submit" className={btnPrimary}>{mode === 'edit' ? 'Save Changes' : 'Create Reminder'}</button>
+                <div className="flex justify-between items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    {mode === 'edit' ? (
+                        <div className="flex items-center gap-2">
+                             <button type="button" onClick={handleSnooze} title="Snooze 1 Day" className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                <Clock size={18} />
+                            </button>
+                             <button type="button" onClick={handleComplete} title="Mark as Complete" className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full transition-colors">
+                                <CheckSquareIcon size={18} />
+                            </button>
+                             <button type="button" onClick={handleDelete} title="Delete" className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full transition-colors">
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div /> // Empty div for spacing
+                    )}
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
+                        <button type="submit" className={btnPrimary}>{mode === 'edit' ? 'Save Changes' : 'Create Reminder'}</button>
+                    </div>
                 </div>
             </form>
         </Modal>
