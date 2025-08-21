@@ -1,4 +1,4 @@
-import { Reminder } from './types';
+import { Reminder, AutoReminder } from './types';
 
 export const INITIAL_REMINDER_TYPES: string[] = [
     'Anniversary',
@@ -6,6 +6,7 @@ export const INITIAL_REMINDER_TYPES: string[] = [
     'Bill Payment',
     'Birthday',
     'General',
+    'Holiday',
     'Meeting',
     'Renewal',
 ];
@@ -61,5 +62,25 @@ export const INITIAL_SUGGESTIONS: Omit<Reminder, 'id'>[] = [
         type: 'Bill Payment',
         description: "Based on previous payment patterns from your SMS.",
         recurrenceRule: { frequency: 'MONTHLY', interval: 1 },
+    }
+];
+
+
+export const INITIAL_AUTO_REMINDERS: AutoReminder[] = [
+    {
+        id: 'auto-1',
+        title: "Pay Electricity Bill",
+        date: new Date(new Date().getFullYear(), new Date().getMonth(), 20),
+        type: 'Bill Payment',
+        description: "Detected from your Gmail inbox (Adani Electricity invoice).",
+        source: 'Gmail',
+    },
+    {
+        id: 'auto-2',
+        title: "Phone Bill Due",
+        date: new Date(new Date().getFullYear(), new Date().getMonth(), 15),
+        type: 'Bill Payment',
+        description: "Detected from your SMS inbox (Jio bill reminder).",
+        source: 'SMS',
     }
 ];

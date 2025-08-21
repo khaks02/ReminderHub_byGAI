@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Reminder, RecurrenceRule } from '../types';
 import Modal from './Modal';
 import { useAppContext } from '../hooks/useAppContext';
-import { Tag, Calendar, MessageSquare, Repeat, Hash, ChevronDown, Check } from 'lucide-react';
+import { Tag, Calendar, MessageSquare, Check } from 'lucide-react';
+
+const labelStyle = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2";
+const inputStyle = "w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2.5 text-content-light dark:text-content-dark placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition-colors";
+const btnPrimary = "inline-flex items-center justify-center px-6 py-2.5 rounded-lg bg-primary text-white hover:bg-primary-dark font-semibold transition-colors";
+const btnSecondary = "inline-flex items-center justify-center px-6 py-2.5 rounded-lg bg-slate-200 dark:bg-slate-600 text-content-light dark:text-content-dark hover:bg-slate-300 dark:hover:bg-slate-500 font-semibold transition-colors";
 
 interface ReminderFormModalProps {
     isOpen: boolean;
@@ -14,7 +19,7 @@ interface ReminderFormModalProps {
 
 const InputField = ({ icon, children }: { icon: React.ReactNode, children: React.ReactNode }) => (
     <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
             {icon}
         </div>
         {children}
@@ -25,11 +30,12 @@ const RecurrenceButton = ({ label, isActive, onClick }: { label: string, isActiv
     <button
         type="button"
         onClick={onClick}
-        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${isActive ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+        className={`px-3 py-1 text-sm font-medium rounded-md flex-1 transition-all duration-200 ${isActive ? 'bg-white dark:bg-slate-900 shadow-sm text-primary' : 'hover:bg-slate-200 dark:hover:bg-slate-600/50'}`}
     >
         {label}
     </button>
 );
+
 
 const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, initialData, onClose, onSave }) => {
     const { reminderTypes } = useAppContext();
@@ -39,7 +45,7 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
     
     useEffect(() => {
         setFormData(initialData);
-        if (initialData.recurrenceRule && initialData.recurrenceRule.interval > 1) {
+        if (initialData.recurrenceRule && (initialData.recurrenceRule.interval > 1 || !['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(initialData.recurrenceRule.frequency))) {
             setShowCustomRecurrence(true);
         } else {
             setShowCustomRecurrence(false);
@@ -101,36 +107,41 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
 
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={mode === 'edit' ? 'Edit Reminder' : 'Create New Reminder'}>
+        <Modal isOpen={isOpen} onClose={onClose} title={mode === 'edit' ? 'Edit Reminder' : 'Create New Reminder'} maxWidth="2xl">
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
+                    <label htmlFor="title" className={labelStyle}>Title</label>
                     <InputField icon={<Tag size={16} />}>
-                        <input type="text" name="title" placeholder="Title" value={formData.title || ''} onChange={handleInputChange} className="w-full input-style pl-9" />
+                        <input id="title" type="text" name="title" placeholder="e.g., Project Deadline" value={formData.title || ''} onChange={handleInputChange} className={`${inputStyle} pl-10`} />
                     </InputField>
                      {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title}</p>}
                 </div>
                 <div>
+                    <label htmlFor="description" className={labelStyle}>Description</label>
                     <InputField icon={<MessageSquare size={16} />}>
-                        <textarea name="description" placeholder="Description" value={formData.description || ''} onChange={handleInputChange} className="w-full input-style pl-9" rows={3}></textarea>
+                        <textarea id="description" name="description" placeholder="Add more details..." value={formData.description || ''} onChange={handleInputChange} className={`${inputStyle} pl-10`} rows={3}></textarea>
                     </InputField>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
+                        <label htmlFor="date" className={labelStyle}>Date & Time</label>
                         <InputField icon={<Calendar size={16} />}>
-                            <input type="datetime-local" name="date" value={formData.date ? toLocalISOString(formData.date) : ''} onChange={handleDateChange} className="w-full input-style pl-9" />
+                            <input id="date" type="datetime-local" name="date" value={formData.date ? toLocalISOString(formData.date) : ''} onChange={handleDateChange} className={`${inputStyle} pl-10`} />
                         </InputField>
                         {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
                     </div>
                      <div>
+                        <label htmlFor="type" className={labelStyle}>Type</label>
                         <InputField icon={<Check size={16} />}>
                              <input
+                                id="type"
                                 type="text"
                                 name="type"
                                 list="reminder-types"
-                                placeholder="Type (e.g., Birthday)"
+                                placeholder="e.g., Birthday"
                                 value={formData.type || ''}
                                 onChange={handleInputChange}
-                                className="w-full input-style pl-9"
+                                className={`${inputStyle} pl-10`}
                             />
                             <datalist id="reminder-types">
                                 {reminderTypes.map(type => <option key={type} value={type} />)}
@@ -140,8 +151,8 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium mb-2">Recurrence</label>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <label className={labelStyle}>Recurrence</label>
+                    <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
                         <RecurrenceButton label="None" isActive={activeRecurrence === 'none'} onClick={() => { handleRecurrenceChange(null); setShowCustomRecurrence(false); }} />
                         <RecurrenceButton label="Daily" isActive={activeRecurrence === 'daily'} onClick={() => { handleRecurrenceChange({ frequency: 'DAILY', interval: 1 }); setShowCustomRecurrence(false); }} />
                         <RecurrenceButton label="Weekly" isActive={activeRecurrence === 'weekly'} onClick={() => { handleRecurrenceChange({ frequency: 'WEEKLY', interval: 1 }); setShowCustomRecurrence(false); }} />
@@ -151,16 +162,16 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
                     </div>
                     {showCustomRecurrence && (
                         <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg flex items-center gap-3 animate-fade-in-up">
-                            <span className="font-semibold">Repeat every</span>
+                            <span className="font-semibold text-sm">Repeat every</span>
                             <input 
                                 type="number"
                                 name="interval"
                                 value={formData.recurrenceRule?.interval || 1}
                                 onChange={handleCustomRecurrenceChange}
-                                className="w-20 input-style text-center"
+                                className={`${inputStyle} w-20 text-center py-2`}
                                 min="1"
                             />
-                            <select name="frequency" value={formData.recurrenceRule?.frequency || 'WEEKLY'} onChange={handleCustomRecurrenceChange} className="input-style">
+                            <select name="frequency" value={formData.recurrenceRule?.frequency || 'WEEKLY'} onChange={handleCustomRecurrenceChange} className={`${inputStyle} py-2`}>
                                 <option value="DAILY">Day(s)</option>
                                 <option value="WEEKLY">Week(s)</option>
                                 <option value="MONTHLY">Month(s)</option>
@@ -170,38 +181,11 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
                     )}
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
-                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 font-semibold">Cancel</button>
-                    <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary-dark font-semibold">{mode === 'edit' ? 'Save Changes' : 'Create Reminder'}</button>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onClose} className={btnSecondary}>Cancel</button>
+                    <button type="submit" className={btnPrimary}>{mode === 'edit' ? 'Save Changes' : 'Create Reminder'}</button>
                 </div>
             </form>
-             <style>{`
-                .input-style {
-                    background-color: white;
-                    border: 1px solid #D1D5DB; /* gray-300 */
-                    border-radius: 0.5rem; /* rounded-md */
-                    padding: 0.75rem 1rem;
-                    color: #111827; /* gray-900 */
-                    transition: border-color 0.2s, box-shadow 0.2s;
-                }
-                .input-style:focus {
-                    outline: none;
-                    border-color: hsl(210, 40%, 50%);
-                    box-shadow: 0 0 0 2px hsla(210, 40%, 50%, 0.2);
-                }
-                .dark .input-style {
-                    background-color: #334155; /* slate-700 */
-                    border-color: #475569; /* slate-600 */
-                    color: #F8FAFC; /* slate-50 */
-                }
-                .dark .input-style:focus {
-                     border-color: hsl(210, 40%, 60%);
-                     box-shadow: 0 0 0 2px hsla(210, 40%, 60%, 0.2);
-                }
-                .dark .input-style::-webkit-calendar-picker-indicator {
-                    filter: invert(1);
-                }
-            `}</style>
         </Modal>
     );
 };

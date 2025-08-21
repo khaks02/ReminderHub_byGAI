@@ -1,21 +1,26 @@
 
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { analyzeReminder } from '../services/geminiService';
+import { analyzeReminder, getHolidays } from '../services/geminiService';
 import ReminderCard from '../components/ReminderCard';
 import ChatInput from '../components/ChatInput';
 import Toast from '../components/Toast';
 import EditReminderModal from '../components/EditReminderModal';
 import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
+import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion } from '../types';
-import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
 import { INITIAL_SUGGESTIONS } from '../constants';
 import * as ReactRouterDOM from 'react-router-dom';
 const { NavLink } = ReactRouterDOM;
 
+// Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
+const toDateKey = (date: Date) => date.toLocaleDateString('en-CA');
+
 const DashboardPage: React.FC = () => {
-    const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType } = useAppContext();
+    const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType, addHolidaysBatch } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -32,15 +37,15 @@ const DashboardPage: React.FC = () => {
     }>({ isOpen: false, vendorSuggestion: null });
     
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(new Date());
     const [suggestions, setSuggestions] = useState(INITIAL_SUGGESTIONS.map(s => ({...s, id: `sug-${Math.random()}`})));
+    const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
     
-    const activeReminders = reminders.filter(r => !r.isCompleted);
-
     const remindersByDate = useMemo(() => {
         const map = new Map<string, Reminder[]>();
         reminders.forEach(reminder => {
             if (reminder.date) {
-                const key = reminder.date.toISOString().split('T')[0];
+                const key = toDateKey(new Date(reminder.date));
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
@@ -49,6 +54,12 @@ const DashboardPage: React.FC = () => {
         });
         return map;
     }, [reminders]);
+
+    const remindersForSelectedDay = useMemo(() => {
+        const key = toDateKey(selectedDate);
+        return (remindersByDate.get(key) || []).filter(r => !r.isCompleted);
+    }, [selectedDate, remindersByDate]);
+
 
     const handleNewReminder = useCallback(async (prompt: string) => {
         setIsLoading(true);
@@ -195,6 +206,29 @@ const DashboardPage: React.FC = () => {
         setSuggestions(prev => prev.filter(s => s.id !== id));
         setToast({ message: 'Suggestion dismissed.', type: 'success' });
     };
+    
+    const handleImportHolidays = async (year: number, country: string, region: string) => {
+        try {
+            const holidays = await getHolidays(year, country, region);
+            if (holidays.length === 0) {
+                setToast({ message: `No holidays found for ${country}.`, type: 'error' });
+                return;
+            }
+            const addedCount = addHolidaysBatch(holidays, country);
+            setToast({ message: `Successfully imported ${addedCount} new holiday(s)!`, type: 'success' });
+            
+        } catch (error) {
+             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during import.";
+             setToast({ message: `Error: ${errorMessage}`, type: 'error' });
+             // Re-throw to keep modal open and show error
+             throw error;
+        }
+    };
+    
+    const showToast = (message: string, type: 'success' | 'error') => {
+        setToast({ message, type });
+    };
+
 
     const renderMonthView = () => {
         const year = currentDate.getFullYear();
@@ -209,15 +243,25 @@ const DashboardPage: React.FC = () => {
 
         for (let day = 1; day <= lastDay.getDate(); day++) {
             const date = new Date(year, month, day);
-            const dateKey = date.toISOString().split('T')[0];
+            const dateKey = toDateKey(date);
             const dayReminders = remindersByDate.get(dateKey) || [];
-            const isToday = date.toDateString() === new Date().toDateString();
+            const isToday = dateKey === toDateKey(new Date());
+            const isSelected = dateKey === toDateKey(selectedDate);
             
             days.push(
                 <div 
                     key={dateKey} 
-                    className="border-r border-b border-gray-200 dark:border-slate-700 p-2 min-h-28 relative group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
-                    onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date } })}
+                    className={`border-r border-b border-gray-200 dark:border-slate-700 p-2 min-h-28 relative group transition-colors cursor-pointer ${isSelected ? 'ring-2 ring-primary/80 bg-primary/10 dark:bg-primary/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                    onClick={() => {
+                        setSelectedDate(date);
+                        if (dayReminders.length === 0) {
+                            setReminderModalState({
+                                isOpen: true,
+                                mode: 'create',
+                                initialData: { date: date },
+                            });
+                        }
+                    }}
                 >
                     <span className={`font-semibold ${isToday ? 'bg-primary text-white rounded-full flex items-center justify-center w-7 h-7' : ''}`}>{day}</span>
                     <div className="mt-1 space-y-1">
@@ -228,7 +272,11 @@ const DashboardPage: React.FC = () => {
                                     e.stopPropagation(); // Prevent cell's onClick from firing
                                     setReminderModalState({ isOpen: true, mode: 'edit', initialData: r });
                                 }}
-                                className={`text-xs p-1 rounded-md cursor-pointer truncate ${r.isCompleted ? 'bg-green-100 dark:bg-green-900/50 line-through text-gray-500' : 'bg-blue-100 dark:bg-blue-900/50'}`}
+                                className={`text-xs p-1 rounded-md cursor-pointer truncate ${
+                                    r.isCompleted ? 'bg-green-100 dark:bg-green-900/50 line-through text-gray-500' : 
+                                    r.type === 'Holiday' ? 'bg-purple-100 dark:bg-purple-900/50' : 
+                                    'bg-blue-100 dark:bg-blue-900/50'
+                                }`}
                             >
                                 {r.title}
                             </div>
@@ -258,6 +306,13 @@ const DashboardPage: React.FC = () => {
     return (
         <div className="container mx-auto">
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+             {isHolidayModalOpen && (
+                 <HolidayImportModal
+                    isOpen={isHolidayModalOpen}
+                    onClose={() => setIsHolidayModalOpen(false)}
+                    onImport={handleImportHolidays}
+                 />
+             )}
              {reminderModalState.isOpen && (
                 <EditReminderModal
                     isOpen={reminderModalState.isOpen}
@@ -284,7 +339,7 @@ const DashboardPage: React.FC = () => {
                     onAddToCart={handleAddToCartFromVendor}
                 />
             )}
-            <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+            <h1 className="text-3xl font-bold mb-2">Reminders</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Here's your daily overview. Add a reminder below.</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -293,7 +348,10 @@ const DashboardPage: React.FC = () => {
                     <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-slate-700">
                          <h2 className="text-xl font-semibold">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                          <div className="flex items-center gap-2">
-                             <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
+                             <button onClick={() => setIsHolidayModalOpen(true)} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                                <DownloadCloud size={16} /> Import Holidays
+                             </button>
+                             <button onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
                             <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeft/></button>
                             <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronRight/></button>
                          </div>
@@ -359,10 +417,21 @@ const DashboardPage: React.FC = () => {
             </div>
             
             <div>
-                <h2 className="text-2xl font-semibold mb-4">Your Upcoming Reminders</h2>
-                {activeReminders.length > 0 ? (
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-semibold">
+                        Reminders for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </h2>
+                     <button 
+                        onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate }})}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors"
+                    >
+                        <PlusCircle size={16} /> Add Reminder
+                    </button>
+                </div>
+
+                {remindersForSelectedDay.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {activeReminders.map(reminder => (
+                        {remindersForSelectedDay.map(reminder => (
                             <ReminderCard 
                                 key={reminder.id} 
                                 reminder={reminder} 
@@ -371,12 +440,21 @@ const DashboardPage: React.FC = () => {
                                 onDelete={handleDelete}
                                 onSnooze={handleSnooze}
                                 onComplete={handleComplete}
+                                onShowToast={showToast}
                             />
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-10 px-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                        <p className="text-gray-500 dark:text-gray-400">You have no upcoming reminders. Try adding one with AI!</p>
+                    <div className="text-center py-10 px-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border-2 border-dashed border-gray-200 dark:border-slate-700">
+                        <p className="text-lg font-medium text-gray-700 dark:text-gray-300">It's a quiet day... too quiet.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-2">Looks like there's nothing on the agenda. A perfect day to plan something amazing (or just relax)!</p>
+                        <button 
+                            onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate }})}
+                            className="mt-4 inline-flex items-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors"
+                        >
+                            <PlusCircle size={18}/>
+                            Add a Reminder
+                        </button>
                     </div>
                 )}
             </div>

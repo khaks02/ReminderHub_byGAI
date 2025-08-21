@@ -1,7 +1,8 @@
 
+
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link, Headset } from 'lucide-react';
+import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link, Headset, CalendarPlus } from 'lucide-react';
 import { CartItem, CartItemType } from '../types';
 
 const OrdersPage: React.FC = () => {
@@ -87,6 +88,19 @@ const OrdersPage: React.FC = () => {
                                         </li>
                                     ))}
                                 </ul>
+                                {order.followUpReminders && order.followUpReminders.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+                                        <h4 className="font-semibold text-sm mb-2">Associated Reminders</h4>
+                                        <div className="space-y-2">
+                                        {order.followUpReminders.map((followUp, index) => (
+                                            <div key={index} className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md">
+                                                <CalendarPlus size={16} />
+                                                <span>Added to reminders: <strong>{followUp.title}</strong> on {new Date(followUp.date).toLocaleDateString()}</span>
+                                            </div>
+                                        ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}

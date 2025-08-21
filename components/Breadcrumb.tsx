@@ -1,4 +1,6 @@
 
+
+
 import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { useLocation, Link } = ReactRouterDOM;
@@ -14,7 +16,7 @@ const Breadcrumb: React.FC = () => {
                 <li className="inline-flex items-center">
                     <Link to="/" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
                         <Home className="w-4 h-4 mr-2" />
-                        Home
+                        Reminders
                     </Link>
                 </li>
                 {pathnames.map((value, index) => {

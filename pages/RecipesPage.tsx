@@ -8,6 +8,9 @@ import { Search, Star, Clock, Users, ChefHat, ShoppingBasket, BookOpen, ArrowLef
 import { useAppContext } from '../hooks/useAppContext';
 import Toast from '../components/Toast';
 
+const btnPrimary = "inline-flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors md:col-span-1";
+const btnSecondary = "inline-flex items-center justify-center gap-2 w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition";
+
 
 const RecipesPage: React.FC = () => {
     const { addToCart } = useAppContext();
@@ -137,7 +140,7 @@ const RecipesPage: React.FC = () => {
                 </div>
             )}
 
-            <Modal isOpen={!!selectedRecipe} onClose={handleCloseModal} title={!showInstructions ? selectedRecipe?.name || '' : `How to make ${selectedRecipe?.name}`}>
+            <Modal isOpen={!!selectedRecipe} onClose={handleCloseModal} title={!showInstructions ? selectedRecipe?.name || '' : `How to make ${selectedRecipe?.name}`} maxWidth="2xl">
                 {selectedRecipe && (
                     !showInstructions ? (
                         <div className="space-y-6">
@@ -181,15 +184,15 @@ const RecipesPage: React.FC = () => {
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
-                                <button onClick={() => handleBuyIngredients(selectedRecipe)} className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+                                <button onClick={() => handleBuyIngredients(selectedRecipe)} className={btnSecondary}>
                                     <ShoppingBasket size={18}/>
                                     <span>Buy Ingredients</span>
                                 </button>
-                                 <button onClick={() => setShowInstructions(true)} className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+                                 <button onClick={() => setShowInstructions(true)} className={btnSecondary}>
                                     <BookOpen size={18}/>
                                     <span>View Recipe</span>
                                 </button>
-                                <button onClick={() => handleOrderOnline(selectedRecipe)} className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors md:col-span-1">
+                                <button onClick={() => handleOrderOnline(selectedRecipe)} className={btnPrimary}>
                                      <Sandwich size={18} />
                                      <span>Order Online</span>
                                 </button>

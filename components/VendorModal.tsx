@@ -3,14 +3,16 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { VendorProductCartItem, VendorSuggestion } from '../types';
 
-interface VendorModalProps {
+const inputStyle = "w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-content-light dark:text-content-dark placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition-colors";
+const btnPrimary = "inline-flex items-center justify-center w-full px-6 py-2.5 rounded-lg bg-primary text-white hover:bg-primary-dark font-semibold transition-colors";
+
+
+const VendorModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     vendorSuggestion: VendorSuggestion | null;
     onAddToCart: (item: Omit<VendorProductCartItem, 'id' | 'type' | 'customerCare'>) => void;
-}
-
-const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendorSuggestion, onAddToCart }) => {
+}> = ({ isOpen, onClose, vendorSuggestion, onAddToCart }) => {
     const [productName, setProductName] = useState('');
     const [price, setPrice] = useState('');
 
@@ -69,43 +71,29 @@ const VendorModal: React.FC<VendorModalProps> = ({ isOpen, onClose, vendorSugges
     };
     
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Shop on ${vendorName}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`Shop on ${vendorName}`} maxWidth="4xl">
             <div className="flex flex-col h-[75vh]">
                  <div className="p-2 bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200 rounded-md text-xs mb-4">
                     <strong>Demo Notice:</strong> Many sites block being embedded. This is a simulation. Use the form below to add items to your cart.
                 </div>
-                <iframe src={getVendorUrl()} title={vendorName} className="flex-grow w-full border border-gray-300 dark:border-slate-600 rounded-md"></iframe>
+                <iframe src={getVendorUrl()} title={vendorName} className="flex-grow w-full border border-slate-300 dark:border-slate-600 rounded-md"></iframe>
                 <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
                     <h3 className="font-bold mb-2">Add item to ReminderHub Cart</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                         <div className="md:col-span-2">
                              <label htmlFor="productName" className="text-sm font-medium">Product / Service Name</label>
-                            <input id="productName" type="text" value={productName} onChange={e => setProductName(e.target.value)} placeholder="e.g., 'Red Velvet Cake' or 'AC Service'" className="mt-1 w-full input-style"/>
+                            <input id="productName" type="text" value={productName} onChange={e => setProductName(e.target.value)} placeholder="e.g., 'Red Velvet Cake' or 'AC Service'" className={`mt-1 ${inputStyle}`}/>
                         </div>
                         <div>
                              <label htmlFor="price" className="text-sm font-medium">Price (₹)</label>
-                            <input id="price" type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g., 850.00" className="mt-1 w-full input-style"/>
+                            <input id="price" type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g., 850.00" className={`mt-1 ${inputStyle}`}/>
                         </div>
                     </div>
-                    <button onClick={handleAddToCart} className="mt-3 w-full bg-primary text-white font-bold py-2 px-6 rounded-md hover:bg-primary-dark transition-colors">
+                    <button onClick={handleAddToCart} className={`mt-3 ${btnPrimary}`}>
                         Add to Cart
                     </button>
                 </div>
             </div>
-             <style>{`
-                .input-style {
-                    background-color: white;
-                    border: 1px solid #D1D5DB; /* gray-300 */
-                    border-radius: 0.375rem; /* rounded-md */
-                    padding: 0.5rem 0.75rem;
-                    color: #111827; /* gray-900 */
-                }
-                .dark .input-style {
-                    background-color: #1E293B; /* slate-800 */
-                    border-color: #475569; /* slate-600 */
-                    color: #F8FAFC; /* slate-50 */
-                }
-            `}</style>
         </Modal>
     );
 };

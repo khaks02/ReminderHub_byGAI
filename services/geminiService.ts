@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Reminder, ReminderType, Service, Recipe, RecurrenceRule, ActivityRecommendation } from '../types';
 
@@ -236,5 +237,88 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
     } catch (error) {
         console.error("Error getting recipes:", error);
         throw new Error("Failed to get AI recipes.");
+    }
+};
+
+export const getHolidays = async (year: number, country: string, region?: string): Promise<{ holidayName: string; date: string; }[]> => {
+    const location = region ? `${region}, ${country}` : country;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Generate a list of major public holidays for ${location} for the year ${year}. Include national, regional holidays, and major festivals. Provide only official public holidays.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            holidayName: { type: Type.STRING, description: "The official name of the holiday." },
+                            date: { type: Type.STRING, description: "The date of the holiday in YYYY-MM-DD format." }
+                        },
+                        required: ["holidayName", "date"]
+                    }
+                }
+            }
+        });
+
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString);
+    } catch (error) {
+        console.error(`Error getting holidays for ${location}:`, error);
+        throw new Error(`Failed to fetch holidays from AI. Please check the location and try again.`);
+    }
+};
+
+export const extractFollowUpReminder = async (productName: string, purchaseDate: Date): Promise<{ title: string; date: Date } | null> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Analyze the product name and purchase date to identify a relevant follow-up date for warranty expiration, service renewal, or a recurring purchase reminder.
+- Today's date is: ${new Date().toDateString()}.
+- Purchase date was: ${purchaseDate.toDateString()}.
+- Product/Service: "${productName}".
+
+Your task is to:
+1.  Determine if a follow-up reminder is logical. For one-time purchases like 'Pizza Delivery' or 'Cab Ride', no follow-up is needed. For subscriptions, warranties, or items that need refills, a follow-up is needed.
+2.  If a follow-up is needed, create a concise reminder title.
+3.  Calculate the future date for the reminder.
+4.  If no logical follow-up exists, you MUST return an empty JSON object.
+
+Examples:
+- Product "Apple iPhone 15 with 1-year standard warranty", purchased today -> { "title": "Apple iPhone 15 Warranty Expires", "date": "YYYY-MM-DD" } (one year from purchase)
+- Product "Netflix Monthly Subscription", purchased today -> { "title": "Renew Netflix Subscription", "date": "YYYY-MM-DD" } (one month from purchase)
+- Product "Domino's Pizza", purchased today -> {}
+
+Return ONLY a JSON object with 'title' and 'date' (in "YYYY-MM-DD" format), or an empty JSON object if not applicable.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        date: { type: Type.STRING, description: "The future date in YYYY-MM-DD format." }
+                    },
+                }
+            }
+        });
+
+        const jsonString = response.text.trim();
+        const parsed = JSON.parse(jsonString);
+
+        if (!parsed.title || !parsed.date) {
+            return null;
+        }
+
+        // The model might return a date without time, which JS new Date() interprets as UTC midnight.
+        // Adding time to ensure it's interpreted in the local timezone correctly.
+        return {
+            title: parsed.title,
+            date: new Date(`${parsed.date}T12:00:00`),
+        };
+
+    } catch (error) {
+        console.error("Error extracting follow-up reminder:", error);
+        return null;
     }
 };

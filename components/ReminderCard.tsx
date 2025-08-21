@@ -1,8 +1,7 @@
-
 import React, { useState, useCallback } from 'react';
 import { Reminder, ActivityRecommendation, VendorSuggestion } from '../types';
 import { getServiceRecommendations, searchForServices } from '../services/geminiService';
-import { ChevronDown, Zap, Clock, MoreVertical, Edit, Trash2, Repeat, CheckSquare, Star, ExternalLink, ShoppingCart, Search, Loader } from 'lucide-react';
+import { ChevronDown, Zap, Clock, MoreVertical, Edit, Trash2, Repeat, CheckSquare, Star, ExternalLink, ShoppingCart, Search, Loader, Share2 } from 'lucide-react';
 import Spinner from './Spinner';
 
 interface ReminderCardProps {
@@ -12,9 +11,10 @@ interface ReminderCardProps {
     onDelete: (id: string) => void;
     onSnooze: (id: string, days: number) => void;
     onComplete: (reminder: Reminder) => void;
+    onShowToast: (message: string, type: 'success' | 'error') => void;
 }
 
-const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, onEdit, onDelete, onSnooze, onComplete }) => {
+const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, onEdit, onDelete, onSnooze, onComplete, onShowToast }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +66,32 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
         return new Intl.DateTimeFormat(undefined, {
             year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
         }).format(date);
+    };
+
+    const handleShare = async () => {
+        setIsMenuOpen(false);
+        const shareText = `Reminder: ${reminder.title} on ${formatDate(reminder.date)}. Details: ${reminder.description || 'No description.'}`;
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Reminder: ${reminder.title}`,
+                    text: shareText,
+                    url: window.location.href,
+                });
+            } catch (err) {
+                console.error("Share failed:", err);
+                onShowToast("Could not share reminder.", 'error');
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareText);
+                onShowToast("Invitation copied to clipboard!", 'success');
+            } catch (err) {
+                console.error("Copy failed:", err);
+                onShowToast("Could not copy invitation.", 'error');
+            }
+        }
     };
 
     const formatRecurrence = (rule: Reminder['recurrenceRule']) => {
@@ -134,6 +160,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                                 <button onClick={() => { onComplete(reminder); setIsMenuOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-gray-100 dark:hover:bg-slate-800"><CheckSquare size={14} className="mr-2"/> Mark as Complete</button>
                                 <button onClick={() => { onEdit(reminder); setIsMenuOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800"><Edit size={14} className="mr-2"/> Edit</button>
                                 <button onClick={() => { onSnooze(reminder.id, 1); setIsMenuOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800"><Clock size={14} className="mr-2"/> Snooze 1 Day</button>
+                                <button onClick={handleShare} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800"><Share2 size={14} className="mr-2"/> Share / Invite</button>
                                 <div className="border-t border-gray-100 dark:border-slate-800 my-1"></div>
                                 <button onClick={() => { onDelete(reminder.id); setIsMenuOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-slate-800"><Trash2 size={14} className="mr-2"/> Delete</button>
                             </div>
