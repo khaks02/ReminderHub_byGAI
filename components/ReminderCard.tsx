@@ -77,7 +77,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                 await navigator.share({
                     title: `Reminder: ${reminder.title}`,
                     text: shareText,
-                    url: window.location.href,
+                    url: window.location.origin,
                 });
             } catch (err) {
                 console.error("Share failed:", err);

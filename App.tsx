@@ -1,13 +1,11 @@
 
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { HashRouter, NavLink, Route, Routes, useLocation } = ReactRouterDOM;
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 
-import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User } from 'lucide-react';
+import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, Shuffle } from 'lucide-react';
 import Breadcrumb from './components/Breadcrumb';
 
 import DashboardPage from './pages/DashboardPage';
@@ -153,7 +151,7 @@ const AppContent = () => {
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="block px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
-                                    My Profile
+                                    My Profile & Saved Recipes
                                 </NavLink>
                                  <NavLink 
                                     to="/settings" 

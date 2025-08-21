@@ -1,9 +1,34 @@
-
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { Reminder, ReminderType, Service, Recipe, RecurrenceRule, ActivityRecommendation } from '../types';
+import { Reminder, ReminderType, Service, Recipe, RecurrenceRule, ActivityRecommendation, DailyRecommendationResponse } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Caches for session-level storage to reduce API calls
+const drinkPairingCache = new Map<string, string>();
+const vendorActionCache = new Map<string, ActivityRecommendation[]>();
+
+
+const RECIPE_SCHEMA = {
+    type: Type.OBJECT,
+    properties: {
+        name: { type: Type.STRING },
+        description: { type: Type.STRING },
+        price: { type: Type.NUMBER, description: "Price for one serving of the prepared dish in local currency (e.g., INR)."},
+        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
+        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        isVeg: { type: Type.BOOLEAN },
+        cuisine: { type: Type.STRING },
+        rating: { type: Type.NUMBER },
+        cookTimeInMinutes: { type: Type.INTEGER },
+        servings: { type: Type.INTEGER },
+        deliveryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
+        groceryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
+        difficulty: { type: Type.STRING, enum: ["Easy", "Medium", "Hard"], description: "The cooking difficulty level." },
+        calories: { type: Type.INTEGER, description: "Estimated calories per serving." },
+    },
+    required: ["name", "description", "price", "ingredients", "instructions", "isVeg", "cuisine", "rating", "cookTimeInMinutes", "servings", "deliveryVendors", "groceryVendors", "difficulty", "calories"]
+};
+
 
 export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
     try {
@@ -194,29 +219,12 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Generate 8 popular Indian recipes for "${query}". ${dietContext} The user is located in ${region}. Based on a simulated real-time web search for that area, provide realistic vendors. For each recipe, provide a name, short description, estimated price for one serving in INR, ingredients, instructions, cuisine style, isVeg (boolean), a rating out of 5, cook time in minutes, servings, a list of 2-3 popular food delivery vendors (like Zomato, Swiggy) that operate in the user's region, and a list of 2-3 popular grocery delivery vendors (like Instamart, BigBasket, Zepto) available there.`,
+            contents: `Generate 8 recipes for "${query}". You can include dishes from any world cuisine that are popular in India. ${dietContext} The user is located in ${region}. Based on a simulated real-time web search for that area, provide realistic vendors. For each recipe, provide all details including name, short description, estimated price for one serving in INR, ingredients, instructions, cuisine style, isVeg (boolean), a rating out of 5, cook time in minutes, servings, difficulty level ('Easy', 'Medium', or 'Hard'), and estimated calories per serving. Also include a list of 2-3 popular food delivery vendors (like Zomato, Swiggy) that operate in the user's region, and a list of 2-3 popular grocery delivery vendors (like Instamart, BigBasket, Zepto) available there.`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING },
-                            description: { type: Type.STRING },
-                            price: { type: Type.NUMBER, description: "Price for one serving of the prepared dish in local currency (e.g., INR)."},
-                            ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            isVeg: { type: Type.BOOLEAN },
-                            cuisine: { type: Type.STRING },
-                            rating: { type: Type.NUMBER },
-                            cookTimeInMinutes: { type: Type.INTEGER },
-                            servings: { type: Type.INTEGER },
-                            deliveryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            groceryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        },
-                        required: ["name", "description", "price", "ingredients", "instructions", "isVeg", "cuisine", "rating", "cookTimeInMinutes", "servings", "deliveryVendors", "groceryVendors"]
-                    }
+                    items: RECIPE_SCHEMA
                 }
             }
         });
@@ -227,7 +235,7 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
         // Map recipes and add placeholder images directly, removing image generation to avoid API rate limits.
         const recipesWithPlaceholders = recipesData.map((r: any, index: number) => ({
             ...r,
-            id: `${query.replace(/\s/g, '-')}-${index}`,
+            id: `${query.replace(/\s/g, '-')}-${index}-${Date.now()}`,
             rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
             imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
         }));
@@ -237,6 +245,156 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
     } catch (error) {
         console.error("Error getting recipes:", error);
         throw new Error("Failed to get AI recipes.");
+    }
+};
+
+export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
+    const region = "Mumbai, India";
+    const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : 'Include a mix of vegetarian and non-vegetarian options.';
+    const historyPrompt = history.length > 0 ? `To ensure variety, please DO NOT include any of the following dishes that have been shown recently: ${history.join(', ')}.` : '';
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `First, pick a creative theme for today's meal plan, like a specific regional Indian cuisine (e.g., 'A Taste of Kerala') or a concept like 'Monsoon Comfort Foods'. Generate a daily meal plan for a user in ${region} based on this theme. The plan should consist of 4 unique recipes for each of the following 5 categories: 'breakfast', 'lunch', 'hitea' (for evening snacks), 'dinner', and 'all_time_snacks'. The theme should be subtly reflected in the choices. ${dietContext} ${historyPrompt} For each recipe, provide all necessary details, including difficulty level ('Easy', 'Medium', 'Hard'), estimated calories per serving, and realistic local vendors for delivery and groceries.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        theme: { type: Type.STRING, description: "The creative theme you chose for the day's meal plan."},
+                        breakfast: { type: Type.ARRAY, items: RECIPE_SCHEMA },
+                        lunch: { type: Type.ARRAY, items: RECIPE_SCHEMA },
+                        hitea: { type: Type.ARRAY, items: RECIPE_SCHEMA },
+                        dinner: { type: Type.ARRAY, items: RECIPE_SCHEMA },
+                        all_time_snacks: { type: Type.ARRAY, items: RECIPE_SCHEMA },
+                    },
+                    required: ["theme", "breakfast", "lunch", "hitea", "dinner", "all_time_snacks"]
+                }
+            }
+        });
+        const jsonString = response.text.trim();
+        const recommendations: DailyRecommendationResponse = JSON.parse(jsonString);
+
+        // Add IDs and placeholder images to all recipes
+        Object.keys(recommendations).forEach(key => {
+            if (key !== 'theme') {
+                const category = key as keyof Omit<DailyRecommendationResponse, 'theme'>;
+                recommendations[category] = recommendations[category].map((r: any, index: number) => ({
+                    ...r,
+                    id: `${category}-${r.name.replace(/\s/g, '-')}-${index}-${Date.now()}`,
+                    rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
+                    imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
+                }));
+            }
+        });
+
+        return recommendations;
+    } catch (error) {
+        console.error("Error getting daily recommendations:", error);
+        throw new Error("Failed to get daily AI recipe recommendations.");
+    }
+};
+
+export const shuffleRecipeCategory = async (category: string, isVeg: boolean, history: string[]): Promise<Recipe[]> => {
+    const region = "Mumbai, India";
+    const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : '';
+    const historyPrompt = history.length > 0 ? `To ensure variety, do not include any of these recently shown dishes: ${history.join(', ')}.` : '';
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Generate 4 new, unique recipes for the meal category '${category}' suitable for a user in ${region}. Include difficulty level ('Easy', 'Medium', or 'Hard') and estimated calories per serving for each. ${dietContext} ${historyPrompt}`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: RECIPE_SCHEMA
+                }
+            }
+        });
+        const jsonString = response.text.trim();
+        const recipesData = JSON.parse(jsonString);
+
+        return recipesData.map((r: any, index: number) => ({
+            ...r,
+            id: `${category}-shuffle-${r.name.replace(/\s/g, '-')}-${index}-${Date.now()}`,
+            rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
+            imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
+        }));
+
+    } catch (error) {
+        console.error(`Error shuffling category ${category}:`, error);
+        throw new Error(`Failed to get new ${category} recipes.`);
+    }
+};
+
+export const getVendorsForRecipeAction = async (recipe: Recipe, action: 'Buy Ingredients' | 'Order Online' | 'Hire a Chef'): Promise<ActivityRecommendation[]> => {
+    const cacheKey = `${recipe.id}-${action}`;
+    if (vendorActionCache.has(cacheKey)) {
+        return vendorActionCache.get(cacheKey)!;
+    }
+    
+    try {
+        let actionDescription = '';
+        switch(action) {
+            case 'Buy Ingredients': 
+                actionDescription = `The user wants to buy ingredients to cook "${recipe.name}". Suggest 2-3 popular Indian grocery delivery vendors (like BigBasket, Zepto, Instamart) where they can search for these ingredients. The productQuery should be a simple search term for the ingredients.`;
+                break;
+            case 'Order Online':
+                actionDescription = `The user wants to order the prepared dish "${recipe.name}" online. Suggest 2-3 popular Indian food delivery vendors (like Zomato, Swiggy) where they can find this dish from local restaurants. The productQuery should be the recipe name.`;
+                break;
+            case 'Hire a Chef':
+                actionDescription = `The user wants to hire a professional chef to cook "${recipe.name}". Suggest 2-3 platforms or services in India (like Urban Company, Cookifi) that offer personal chef services. The productQuery should be 'personal chef for home cooking'.`;
+                break;
+        }
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `${actionDescription} For each vendor, provide their name, a short description, a realistic price range in INR for the service/product, a rating out of 5, the relevant productQuery, and a customer care contact.`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            activity: { type: Type.STRING },
+                            vendors: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        name: { type: Type.STRING },
+                                        description: { type: Type.STRING },
+                                        priceRange: { type: Type.STRING },
+                                        rating: { type: Type.NUMBER },
+                                        productQuery: { type: Type.STRING },
+                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
+                                    },
+                                    required: ["name", "description", "priceRange", "rating", "productQuery"]
+                                }
+                            }
+                        },
+                        required: ["activity", "vendors"]
+                    }
+                }
+            }
+        });
+        const jsonString = response.text.trim();
+        const results = JSON.parse(jsonString);
+        vendorActionCache.set(cacheKey, results); // Cache result
+        return results;
+
+    } catch (error: any) {
+        console.error("Error getting vendors for recipe action:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
+        return [{
+            activity: `Vendors for ${action}`,
+            vendors: [{ name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: `${action} for ${recipe.name}`, customerCare: 'N/A' }]
+        }];
     }
 };
 
@@ -320,5 +478,41 @@ Return ONLY a JSON object with 'title' and 'date' (in "YYYY-MM-DD" format), or a
     } catch (error) {
         console.error("Error extracting follow-up reminder:", error);
         return null;
+    }
+};
+
+export const getAiKitchenTip = async (): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: "Provide a single, clever, and useful kitchen tip or cooking hack that is not commonly known. Make it concise and easy to understand. Start directly with the tip.",
+        });
+        return response.text.trim();
+    } catch (error) {
+        console.error("Error getting AI kitchen tip:", error);
+        return "To keep herbs fresh longer, wrap them in a damp paper towel before refrigerating."; // Fallback tip
+    }
+};
+
+export const getDrinkPairing = async (recipeName: string, cuisine: string): Promise<string> => {
+    const cacheKey = recipeName;
+    if (drinkPairingCache.has(cacheKey)) {
+        return drinkPairingCache.get(cacheKey)!;
+    }
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `What is an excellent drink pairing (alcoholic or non-alcoholic) for the dish "${recipeName}", which is a part of ${cuisine} cuisine? Provide a single, concise suggestion with a brief reason.`,
+        });
+        const result = response.text.trim();
+        drinkPairingCache.set(cacheKey, result); // Cache result
+        return result;
+    } catch (error: any) {
+        console.error("Error getting drink pairing:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            return "AI is a bit busy right now. Please try again in a moment.";
+        }
+        return "A glass of chilled water or a light lemonade is always a refreshing choice."; // Fallback pairing
     }
 };
