@@ -1,18 +1,14 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { getRecipes, getDailyRecommendations, shuffleRecipeCategory, getVendorsForRecipeAction, getAiKitchenTip, getDrinkPairing } from '../services/geminiService';
-import { DailyRecommendationResponse, Recipe, VendorSuggestion } from '../types';
+import { DailyRecommendationResponse, Recipe, ActivityRecommendation, VendorSuggestion, CartItemType, PreparedDishCartItem, IngredientsCartItem, ChefServiceCartItem } from '../types';
 import RecipeCard from '../components/RecipeCard';
 import Spinner from '../components/Spinner';
 import Modal from '../components/Modal';
-import { Search, Star, Clock, Users, ChefHat, ShoppingBasket, BookOpen, ArrowLeft, Sandwich, Shuffle, Heart, Share2, Lightbulb, Wine, BarChart3, Thermometer } from 'lucide-react';
+import { Search, Star, Clock, Users, ChefHat, ShoppingBasket, BookOpen, Sandwich, Shuffle, Heart, Lightbulb, Wine, BarChart3, Thermometer, ExternalLink, X, Utensils } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
 import Toast from '../components/Toast';
-import RecipeVendorModal from '../components/RecipeVendorModal';
 import VendorModal from '../components/VendorModal';
-
-const btnPrimary = "inline-flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors md:col-span-1";
-const btnSecondary = "inline-flex items-center justify-center gap-2 w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition";
 
 const RECIPE_HISTORY_KEY = 'recipeHistory';
 const MAX_HISTORY_SIZE = 200;
@@ -28,16 +24,25 @@ const categoryTitles: { [key: string]: string } = {
     all_time_snacks: "All-Time Snacks"
 };
 
+type RecipeDetailTab = 'ingredients' | 'instructions' | 'services';
+type RecipeServiceAction = 'Buy Ingredients' | 'Order Online' | 'Hire a Chef';
+
+const TabButton = ({ label, isActive, onClick }: { label: string, isActive: boolean, onClick: () => void }) => (
+    <button
+        onClick={onClick}
+        className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${isActive ? 'bg-primary text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+    >
+        {label}
+    </button>
+);
+
+
 const RecipesPage: React.FC = () => {
     const { addToCart, saveRecipe, unsaveRecipe, savedRecipes } = useAppContext();
     const [query, setQuery] = useState('');
     const [isVeg, setIsVeg] = useState(false);
     const [dailyRecommendations, setDailyRecommendations] = useState<Omit<DailyRecommendationResponse, 'theme'>>({
-        breakfast: [],
-        lunch: [],
-        hitea: [],
-        dinner: [],
-        all_time_snacks: [],
+        breakfast: [], lunch: [], hitea: [], dinner: [], all_time_snacks: [],
     });
     const [dailyTheme, setDailyTheme] = useState<string | null>(null);
     const [kitchenTip, setKitchenTip] = useState<string>('');
@@ -45,22 +50,27 @@ const RecipesPage: React.FC = () => {
     const [loadingState, setLoadingState] = useState<{global: boolean, [key: string]: boolean}>({ global: true });
     const [error, setError] = useState<string | null>(null);
     const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-    const [showInstructions, setShowInstructions] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const [vendorActionState, setVendorActionState] = useState<{isOpen: boolean; recipe: Recipe | null; action: 'Buy Ingredients' | 'Order Online' | 'Hire a Chef' | null}>({isOpen: false, recipe: null, action: null});
-    const [vendorModal, setVendorModal] = useState<{ isOpen: boolean; vendorSuggestion: VendorSuggestion | null; }>({ isOpen: false, vendorSuggestion: null });
+    
+    // State for the new integrated modal
+    const [activeDetailTab, setActiveDetailTab] = useState<RecipeDetailTab>('ingredients');
+    const [serviceAction, setServiceAction] = useState<RecipeServiceAction | null>(null);
+    const [serviceRecommendations, setServiceRecommendations] = useState<ActivityRecommendation[]>([]);
+    const [isServiceLoading, setIsServiceLoading] = useState(false);
+    const [serviceError, setServiceError] = useState<string|null>(null);
+
     const [drinkPairing, setDrinkPairing] = useState<{ loading: boolean, text: string }>({ loading: false, text: '' });
+    const [vendorModal, setVendorModal] = useState<{ isOpen: boolean; vendorSuggestion: VendorSuggestion | null; }>({ isOpen: false, vendorSuggestion: null });
 
 
     const fetchDailyRecipes = useCallback(async (vegetarian: boolean) => {
-        setLoadingState({ global: true });
+        setLoadingState(prev => ({ ...prev, global: true }));
         setError(null);
         setSearchResults(null);
         setQuery('');
 
         try {
-            // Fetch kitchen tip concurrently
-            getAiKitchenTip().then(setKitchenTip);
+            getAiKitchenTip().then(setKitchenTip).catch(console.error);
 
             const history = JSON.parse(localStorage.getItem(RECIPE_HISTORY_KEY) || '[]');
             const results = await getDailyRecommendations(vegetarian, history);
@@ -70,16 +80,15 @@ const RecipesPage: React.FC = () => {
             
             const allNewRecipes = Object.values(meals).flat();
             const newHistory = [...history, ...allNewRecipes.map(r => r.name)];
-            // Prune history to prevent it from growing too large
             if (newHistory.length > MAX_HISTORY_SIZE) {
                 newHistory.splice(0, newHistory.length - MAX_HISTORY_SIZE);
             }
             localStorage.setItem(RECIPE_HISTORY_KEY, JSON.stringify(newHistory));
 
         } catch (err) {
-            setError('Failed to fetch daily recipes. The AI might be busy, please try again.');
+            setError(err instanceof Error ? err.message : 'Failed to fetch daily recipes. The AI might be busy, please try again.');
         } finally {
-            setLoadingState({ global: false });
+            setLoadingState(prev => ({ ...prev, global: false }));
         }
     }, []);
     
@@ -97,7 +106,7 @@ const RecipesPage: React.FC = () => {
             const results = await getRecipes(query, isVeg);
             setSearchResults(results);
         } catch(err) {
-            setError('Failed to fetch search results. Please try again.');
+            setError(err instanceof Error ? err.message : 'Failed to fetch search results. Please try again.');
         } finally {
             setLoadingState({ global: false });
         }
@@ -118,7 +127,7 @@ const RecipesPage: React.FC = () => {
             localStorage.setItem(RECIPE_HISTORY_KEY, JSON.stringify(newHistory));
 
         } catch (err) {
-            setError(`Failed to shuffle ${category}. Please try again.`);
+             setError(err instanceof Error ? err.message : `Failed to shuffle ${category}. Please try again.`);
         } finally {
             setLoadingState(prev => ({ ...prev, [category]: false }));
         }
@@ -135,23 +144,34 @@ const RecipesPage: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        if (selectedRecipe) {
-            setDrinkPairing({ loading: true, text: '' });
-            getDrinkPairing(selectedRecipe.name, selectedRecipe.cuisine)
-                .then(pairingText => setDrinkPairing({ loading: false, text: pairingText }));
+    const handleSelectRecipe = (recipe: Recipe) => {
+        setSelectedRecipe(recipe);
+        setDrinkPairing({ loading: true, text: '' });
+        getDrinkPairing(recipe.name, recipe.cuisine)
+            .then(pairingText => setDrinkPairing({ loading: false, text: pairingText }));
+    }
+    
+    const handleShowServices = async (action: RecipeServiceAction) => {
+        if (!selectedRecipe) return;
+        setActiveDetailTab('services');
+        setServiceAction(action);
+        setIsServiceLoading(true);
+        setServiceError(null);
+        try {
+            const results = await getVendorsForRecipeAction(selectedRecipe, action);
+            setServiceRecommendations(results);
+        } catch (err) {
+            setServiceError(err instanceof Error ? err.message : 'Could not fetch AI recommendations.');
+        } finally {
+            setIsServiceLoading(false);
         }
-    }, [selectedRecipe]);
-
+    };
 
     const handleCloseModal = () => {
         setSelectedRecipe(null);
-        setShowInstructions(false);
-        setDrinkPairing({ loading: false, text: '' });
-    };
-    
-     const handleShowVendors = (recipe: Recipe, action: 'Buy Ingredients' | 'Order Online' | 'Hire a Chef') => {
-        setVendorActionState({ isOpen: true, recipe, action });
+        setActiveDetailTab('ingredients');
+        setServiceAction(null);
+        setServiceRecommendations([]);
     };
     
     const handleVendorSelect = (vendor: VendorSuggestion) => {
@@ -163,18 +183,42 @@ const RecipesPage: React.FC = () => {
         setToast({ message: `${item.productName} added to cart!`, type: 'success' });
     };
 
+    const handleQuickAddToCart = (recipe: Recipe, action: 'Order Online' | 'Buy Ingredients' | 'Hire a Chef') => {
+        let cartItem: PreparedDishCartItem | IngredientsCartItem | ChefServiceCartItem;
+        let message = '';
+        switch(action) {
+            case 'Order Online':
+                cartItem = { id: `cart-${Date.now()}`, type: CartItemType.PREPARED_DISH, recipe, quantity: 1 };
+                message = `${recipe.name} added to cart for ordering!`;
+                break;
+            case 'Buy Ingredients':
+                cartItem = { id: `cart-${Date.now()}`, type: CartItemType.INGREDIENTS_LIST, recipe };
+                message = `Ingredients for ${recipe.name} added to cart!`;
+                break;
+            case 'Hire a Chef':
+                cartItem = { id: `cart-${Date.now()}`, type: CartItemType.CHEF_SERVICE, recipe, price: 5000 }; // Example price
+                message = `Chef service for ${recipe.name} added to cart!`;
+                break;
+        }
+        addToCart(cartItem);
+        setToast({ message, type: 'success' });
+    };
+
+    const getSearchUrl = (vendor: string, query: string) => {
+        const searchUrlMap: { [key: string]: string } = {
+           'Zomato': `https://www.zomato.com/search?q=${encodeURIComponent(query)}`,
+           'Swiggy': `https://www.swiggy.com/search?query=${encodeURIComponent(query)}`,
+           'BigBasket': `https://www.bigbasket.com/ps/?q=${encodeURIComponent(query)}`,
+           'Zepto': `https://www.zeptonow.com/search?q=${encodeURIComponent(query)}`,
+           'Instamart': `https://www.swiggy.com/instamart/search?query=${encodeURIComponent(query)}`,
+           'Urban Company': `https://www.urbancompany.com/search?q=${encodeURIComponent(query)}`,
+       };
+       return searchUrlMap[vendor] || `https://www.google.com/search?q=${encodeURIComponent(vendor + ' ' + query)}`;
+   };
+
     return (
         <div className="container mx-auto">
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-             {vendorActionState.isOpen && vendorActionState.recipe && vendorActionState.action && (
-                <RecipeVendorModal
-                    isOpen={vendorActionState.isOpen}
-                    onClose={() => setVendorActionState({ isOpen: false, recipe: null, action: null })}
-                    recipe={vendorActionState.recipe}
-                    action={vendorActionState.action}
-                    onVendorSelect={handleVendorSelect}
-                />
-             )}
              {vendorModal.isOpen && (
                 <VendorModal
                     isOpen={vendorModal.isOpen}
@@ -238,8 +282,8 @@ const RecipesPage: React.FC = () => {
                                     <RecipeCard 
                                         key={recipe.id} 
                                         recipe={recipe} 
-                                        onSelect={setSelectedRecipe}
-                                        onShowVendors={handleShowVendors}
+                                        onSelect={handleSelectRecipe}
+                                        onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
                                         onToggleSave={handleToggleSave}
                                         isSaved={savedRecipes.some(r => r.id === recipe.id)}
                                     />
@@ -267,8 +311,8 @@ const RecipesPage: React.FC = () => {
                                             <RecipeCard 
                                                 key={recipe.id} 
                                                 recipe={recipe} 
-                                                onSelect={setSelectedRecipe}
-                                                onShowVendors={handleShowVendors}
+                                                onSelect={handleSelectRecipe}
+                                                onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
                                                 onToggleSave={handleToggleSave}
                                                 isSaved={savedRecipes.some(r => r.id === recipe.id)}
                                             />
@@ -281,39 +325,32 @@ const RecipesPage: React.FC = () => {
                 </>
             )}
 
-            <Modal isOpen={!!selectedRecipe} onClose={handleCloseModal} title={!showInstructions ? selectedRecipe?.name || '' : `How to make ${selectedRecipe?.name}`} maxWidth="2xl">
-                {selectedRecipe && (
-                    !showInstructions ? (
-                        <div className="space-y-6">
-                             <div className="space-y-4">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${selectedRecipe.isVeg ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
-                                                {selectedRecipe.isVeg ? 'Veg' : 'Non-Veg'}
-                                            </span>
-                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                                {selectedRecipe.cuisine}
-                                            </span>
-                                        </div>
-                                         <p className="text-sm text-gray-600 dark:text-gray-400">{selectedRecipe.description}</p>
-                                    </div>
-                                     <div className="flex flex-col items-end gap-2 pl-4">
-                                         <button onClick={() => handleToggleSave(selectedRecipe)} className="flex items-center gap-1.5 text-sm font-medium hover:text-primary transition-colors">
-                                            <Heart size={16} className={savedRecipes.some(r => r.id === selectedRecipe.id) ? 'text-red-500' : ''} fill={savedRecipes.some(r => r.id === selectedRecipe.id) ? 'currentColor' : 'none'}/>
-                                            {savedRecipes.some(r => r.id === selectedRecipe.id) ? 'Saved' : 'Save'}
-                                        </button>
-                                         <div className="flex items-center gap-1" title="Rating"><Star className="text-yellow-500" size={18}/><span className="font-bold">{selectedRecipe.rating.toFixed(1)}</span></div>
-                                     </div>
+            {selectedRecipe && (
+                <Modal isOpen={!!selectedRecipe} onClose={handleCloseModal} title={selectedRecipe.name} maxWidth="4xl">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[80vh]">
+                        {/* Left Panel: Info and Actions */}
+                        <div className="flex flex-col space-y-4">
+                            <div>
+                                <h2 className="text-2xl font-bold">{selectedRecipe.name}</h2>
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${selectedRecipe.isVeg ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+                                        {selectedRecipe.isVeg ? 'Veg' : 'Non-Veg'}
+                                    </span>
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                        {selectedRecipe.cuisine}
+                                    </span>
+                                    <div className="flex items-center gap-1" title="Rating"><Star className="text-yellow-500" size={16}/><span className="font-bold text-sm">{selectedRecipe.rating.toFixed(1)}</span></div>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                                    <div title="Difficulty"><BarChart3 className="mx-auto mb-1" size={20}/><span className="font-bold">{selectedRecipe.difficulty}</span></div>
-                                    <div title="Calories"><Thermometer className="mx-auto mb-1" size={20}/><span className="font-bold">{selectedRecipe.calories} kcal</span></div>
-                                    <div title="Cooking Time"><Clock className="mx-auto mb-1" size={20}/><span>{selectedRecipe.cookTimeInMinutes} mins</span></div>
-                                    <div title="Servings"><Users className="mx-auto mb-1" size={20}/><span>Serves {selectedRecipe.servings}</span></div>
-                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{selectedRecipe.description}</p>
                             </div>
 
+                             <div className="grid grid-cols-2 gap-4 text-sm p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                    <div className="flex items-center gap-2" title="Difficulty"><BarChart3 size={18}/><span className="font-semibold">{selectedRecipe.difficulty}</span></div>
+                                    <div className="flex items-center gap-2" title="Calories"><Thermometer size={18}/><span>{selectedRecipe.calories} kcal</span></div>
+                                    <div className="flex items-center gap-2" title="Cooking Time"><Clock size={18}/><span>{selectedRecipe.cookTimeInMinutes} mins</span></div>
+                                    <div className="flex items-center gap-2" title="Servings"><Users size={18}/><span>Serves {selectedRecipe.servings}</span></div>
+                            </div>
+                            
                             <div className="p-4 bg-indigo-50 dark:bg-indigo-900/40 rounded-lg flex items-start gap-4">
                                 <Wine className="text-indigo-500 w-6 h-6 flex-shrink-0 mt-1" />
                                 <div>
@@ -322,31 +359,83 @@ const RecipesPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div>
-                                <h4 className="font-bold text-lg mb-2">Ingredients</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedRecipe.ingredients.map((ing, i) => <span key={i} className="px-3 py-1 text-sm bg-slate-100 dark:bg-slate-700 rounded-full">{ing}</span>)}
+                             <div className="pt-4 mt-auto space-y-3">
+                                <h3 className="font-bold">Get This Dish</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <button onClick={() => handleShowServices('Buy Ingredients')} className="flex items-center justify-center gap-2 w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"><ShoppingBasket size={16}/><span>Buy Ingredients</span></button>
+                                    <button onClick={() => handleShowServices('Order Online')} className="flex items-center justify-center gap-2 w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"><Sandwich size={16}/><span>Order Online</span></button>
+                                    <button onClick={() => handleShowServices('Hire a Chef')} className="flex items-center justify-center gap-2 w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"><ChefHat size={16}/><span>Hire a Chef</span></button>
                                 </div>
                             </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
-                                <button onClick={() => handleShowVendors(selectedRecipe, 'Buy Ingredients')} className={btnSecondary}><ShoppingBasket size={18}/><span>Buy Ingredients</span></button>
-                                <button onClick={() => setShowInstructions(true)} className={btnSecondary}><BookOpen size={18}/><span>View Instructions</span></button>
-                                <button onClick={() => handleShowVendors(selectedRecipe, 'Order Online')} className={btnPrimary}><Sandwich size={18} /><span>Order Online</span></button>
-                                <button onClick={() => handleShowVendors(selectedRecipe, 'Hire a Chef')} className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-slate-200 dark:bg-slate-600 text-content-light dark:text-content-dark rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition"><ChefHat size={18}/><span>Hire a Chef</span></button>
+                        </div>
+
+                        {/* Right Panel: Tabs */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg flex flex-col overflow-y-auto">
+                            <div className="flex items-center gap-2 mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+                                <TabButton label="Ingredients" isActive={activeDetailTab === 'ingredients'} onClick={() => setActiveDetailTab('ingredients')} />
+                                <TabButton label="Instructions" isActive={activeDetailTab === 'instructions'} onClick={() => setActiveDetailTab('instructions')} />
+                                <TabButton label="AI Services" isActive={activeDetailTab === 'services'} onClick={() => setActiveDetailTab('services')} />
+                            </div>
+                            <div className="flex-grow overflow-y-auto pr-2">
+                                {activeDetailTab === 'ingredients' && (
+                                    <div className="flex flex-wrap gap-2 animate-fade-in">
+                                        {selectedRecipe.ingredients.map((ing, i) => <span key={i} className="px-3 py-1 text-sm bg-slate-200 dark:bg-slate-700 rounded-full">{ing}</span>)}
+                                    </div>
+                                )}
+                                {activeDetailTab === 'instructions' && (
+                                     <ol className="list-decimal list-inside space-y-3 text-gray-700 dark:text-gray-300 prose dark:prose-invert max-w-none animate-fade-in">
+                                        {selectedRecipe.instructions.map((step, i) => <li key={i}>{step}</li>)}
+                                    </ol>
+                                )}
+                                {activeDetailTab === 'services' && (
+                                     <div className="animate-fade-in">
+                                         <h3 className="font-bold mb-2 text-lg">AI Suggestions for: <span className="text-primary">{serviceAction}</span></h3>
+                                         {isServiceLoading && <div className="flex justify-center p-8"><Spinner/></div>}
+                                         {serviceError && <p className="text-red-500 text-sm p-4 text-center">{serviceError}</p>}
+                                         {!isServiceLoading && !serviceError && serviceRecommendations.length > 0 && (
+                                             <div className="space-y-4">
+                                                {serviceRecommendations.map((rec, index) => (
+                                                    <div key={`${rec.activity}-${index}`}>
+                                                        <div className="space-y-2">
+                                                            {rec.vendors.map(vendor => (
+                                                                <div key={vendor.name} className="p-3 bg-white dark:bg-slate-700/50 rounded-lg space-y-2">
+                                                                    <div className="flex justify-between items-start">
+                                                                        <h6 className="font-bold">{vendor.name}</h6>
+                                                                        <div className="flex items-center gap-2 text-sm font-bold shrink-0">
+                                                                             <Star size={16} className="text-yellow-500" />
+                                                                            <span>{vendor.rating.toFixed(1)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400">{vendor.description}</p>
+                                                                    <div className="flex justify-end items-center gap-2 pt-1">
+                                                                        <a href={getSearchUrl(vendor.name, vendor.productQuery)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Open in new tab">
+                                                                            <ExternalLink size={16} />
+                                                                        </a>
+                                                                        <button 
+                                                                            onClick={() => handleVendorSelect(vendor)}
+                                                                            className="flex items-center gap-2 text-sm font-semibold bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-md shadow-sm hover:bg-gray-200 dark:hover:bg-slate-900 transition-colors"
+                                                                        >
+                                                                            <Utensils size={16} />
+                                                                            <span>Explore</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                         )}
+                                         {!isServiceLoading && !serviceError && serviceRecommendations.length === 0 && !serviceAction && (
+                                            <p className="text-sm text-gray-500 text-center p-4">Select an action on the left to see AI-powered service recommendations.</p>
+                                         )}
+                                     </div>
+                                )}
                             </div>
                         </div>
-                    ) : (
-                        <div>
-                             <button onClick={() => setShowInstructions(false)} className="flex items-center gap-2 mb-4 text-sm font-semibold text-primary hover:underline"><ArrowLeft size={16} />Back to Details</button>
-                            <h4 className="font-bold text-lg mb-2">Instructions</h4>
-                            <ol className="list-decimal list-inside space-y-3 text-gray-700 dark:text-gray-300 prose dark:prose-invert max-w-none">
-                                {selectedRecipe.instructions.map((step, i) => <li key={i}>{step}</li>)}
-                            </ol>
-                        </div>
-                    )
-                )}
-            </Modal>
+                   </div>
+                </Modal>
+            )}
         </div>
     );
 };

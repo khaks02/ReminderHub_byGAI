@@ -6,6 +6,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // Caches for session-level storage to reduce API calls
 const drinkPairingCache = new Map<string, string>();
 const vendorActionCache = new Map<string, ActivityRecommendation[]>();
+const serviceRecommendationCache = new Map<string, ActivityRecommendation[]>();
+const dailyRecommendationsCache = new Map<boolean, DailyRecommendationResponse>(); // boolean key for isVeg
+let kitchenTipCache: string | null = null;
 
 
 const RECIPE_SCHEMA = {
@@ -68,14 +71,22 @@ export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Remi
             description: parsed.description,
             recurrenceRule: parsed.recurrenceRule || null
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error analyzing reminder:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
         // On failure, return a partial object. The dashboard will open the modal for completion.
         return { description: prompt };
     }
 };
 
 export const getServiceRecommendations = async (reminder: Reminder): Promise<ActivityRecommendation[]> => {
+    const cacheKey = reminder.id;
+    if (serviceRecommendationCache.has(cacheKey)) {
+        return serviceRecommendationCache.get(cacheKey)!;
+    }
+
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -132,9 +143,13 @@ Example for 'Alice's Birthday':
         });
         const jsonString = response.text.trim();
         const recommendations = JSON.parse(jsonString);
+        serviceRecommendationCache.set(cacheKey, recommendations);
         return recommendations;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error getting service recommendations:", error);
+         if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
          if (reminder.type.toLowerCase().includes('birthday')) {
              return [
                 { activity: 'Online Gift Stores', vendors: [
@@ -199,8 +214,11 @@ export const searchForServices = async (reminder: Reminder, query: string): Prom
         const jsonString = response.text.trim();
         const recommendations = JSON.parse(jsonString);
         return recommendations;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error searching for services:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
         return [
              { activity: `Results for "${query}"`, vendors: [
                 { name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: query, customerCare: 'N/A' },
@@ -242,13 +260,21 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
 
         return recipesWithPlaceholders;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error getting recipes:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
         throw new Error("Failed to get AI recipes.");
     }
 };
 
 export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
+    const cacheKey = isVeg;
+    if (dailyRecommendationsCache.has(cacheKey)) {
+        return dailyRecommendationsCache.get(cacheKey)!;
+    }
+
     const region = "Mumbai, India";
     const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : 'Include a mix of vegetarian and non-vegetarian options.';
     const historyPrompt = history.length > 0 ? `To ensure variety, please DO NOT include any of the following dishes that have been shown recently: ${history.join(', ')}.` : '';
@@ -288,10 +314,13 @@ export const getDailyRecommendations = async (isVeg: boolean, history: string[])
                 }));
             }
         });
-
+        dailyRecommendationsCache.set(cacheKey, recommendations);
         return recommendations;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error getting daily recommendations:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
         throw new Error("Failed to get daily AI recipe recommendations.");
     }
 };
@@ -323,8 +352,11 @@ export const shuffleRecipeCategory = async (category: string, isVeg: boolean, hi
             imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
         }));
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error shuffling category ${category}:`, error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy shuffling. Please try again in a moment.");
+        }
         throw new Error(`Failed to get new ${category} recipes.`);
     }
 };
@@ -422,8 +454,11 @@ export const getHolidays = async (year: number, country: string, region?: string
 
         const jsonString = response.text.trim();
         return JSON.parse(jsonString);
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error getting holidays for ${location}:`, error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("AI is currently busy. Please try again in a moment.");
+        }
         throw new Error(`Failed to fetch holidays from AI. Please check the location and try again.`);
     }
 };
@@ -475,21 +510,33 @@ Return ONLY a JSON object with 'title' and 'date' (in "YYYY-MM-DD" format), or a
             date: new Date(`${parsed.date}T12:00:00`),
         };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error extracting follow-up reminder:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            // Silently fail here as this is a background task and not critical for user flow.
+            return null;
+        }
         return null;
     }
 };
 
 export const getAiKitchenTip = async (): Promise<string> => {
+    if (kitchenTipCache) {
+        return kitchenTipCache;
+    }
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: "Provide a single, clever, and useful kitchen tip or cooking hack that is not commonly known. Make it concise and easy to understand. Start directly with the tip.",
         });
-        return response.text.trim();
-    } catch (error) {
+        const tip = response.text.trim();
+        kitchenTipCache = tip;
+        return tip;
+    } catch (error: any) {
         console.error("Error getting AI kitchen tip:", error);
+        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            return "AI is a bit busy right now, but here's a classic tip: To keep herbs fresh longer, wrap them in a damp paper towel before refrigerating.";
+        }
         return "To keep herbs fresh longer, wrap them in a damp paper towel before refrigerating."; // Fallback tip
     }
 };
