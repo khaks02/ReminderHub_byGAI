@@ -1,5 +1,11 @@
 
 
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+}
 
 export type ReminderType = string;
 
@@ -180,4 +186,11 @@ export type AppContextType = {
     savedRecipes: Recipe[];
     saveRecipe: (recipe: Recipe) => void;
     unsaveRecipe: (recipeId: string) => void;
+};
+
+export type AuthContextType = {
+    currentUser: User | null;
+    loading: boolean;
+    login: (method: 'email' | 'google' | 'facebook', credentials?: { email?: string; password?: string }) => Promise<void>;
+    logout: () => void;
 };

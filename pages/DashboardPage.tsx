@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { analyzeReminder, getHolidays } from '../services/geminiService';
@@ -344,7 +345,7 @@ const DashboardPage: React.FC = () => {
                     onAddToCart={handleAddToCartFromVendor}
                 />
             )}
-            <h1 className="text-3xl font-bold mb-2">Reminders</h1>
+            <h1 className="text-3xl font-bold mb-2">Today's Reminders</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Here's your daily overview. Add a reminder below.</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -424,7 +425,7 @@ const DashboardPage: React.FC = () => {
             <div>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-semibold">
-                        Reminders for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                        Today's Reminders for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
                     </h2>
                      <button 
                         onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate }})}

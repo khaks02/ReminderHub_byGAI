@@ -4,6 +4,7 @@ import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartI
 import { INITIAL_REMINDERS, INITIAL_REMINDER_TYPES, INITIAL_AUTO_REMINDERS } from '../constants';
 import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
 import { extractFollowUpReminder } from '../services/geminiService';
+import { useAuth } from './useAuthContext';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -34,11 +35,13 @@ const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
 
         const parsed = JSON.parse(storedValue);
 
-        if (key === 'reminders' && Array.isArray(parsed)) {
-            // Revive date objects from ISO strings
-            return parsed.map((r: any) => ({
-                ...r,
-                date: new Date(r.date),
+        if ((key.startsWith('reminders') || key.startsWith('orders')) && Array.isArray(parsed)) {
+             // Revive date objects from ISO strings for reminders and orders
+            return parsed.map((item: any) => ({
+                ...item,
+                date: new Date(item.date),
+                 // Also revive follow-up reminder dates inside orders
+                followUpReminders: item.followUpReminders?.map((fu: any) => ({...fu, date: new Date(fu.date)}))
             })) as T;
         }
 
@@ -49,46 +52,51 @@ const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
     }
 };
 
+const saveToStorage = <T,>(key: string, value: T) => {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.error(`Error saving ${key} to localStorage`, error);
+    }
+};
+
+const getInitialReminders = () => [...INITIAL_REMINDERS, ...INITIAL_AUTO_REMINDERS].sort((a, b) => a.date.getTime() - b.date.getTime());
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-    const [reminders, setReminders] = useState<Reminder[]>(() => 
-        loadFromStorage<Reminder[]>('reminders', [...INITIAL_REMINDERS, ...INITIAL_AUTO_REMINDERS].sort((a, b) => a.date.getTime() - b.date.getTime()))
-    );
+    const { currentUser } = useAuth();
+    const userId = currentUser?.id;
+
+    // State is now initialized lazily and will be updated based on user login
+    const [reminders, setReminders] = useState<Reminder[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [reminderTypes, setReminderTypes] = useState<ReminderType[]>(() =>
-        loadFromStorage<ReminderType[]>('reminderTypes', INITIAL_REMINDER_TYPES)
-    );
+    const [reminderTypes, setReminderTypes] = useState<ReminderType[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
-    const [savedRecipes, setSavedRecipes] = useState<Recipe[]>(() =>
-        loadFromStorage<Recipe[]>('savedRecipes', [])
-    );
+    const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+
+    // Effect to load user data on login or reset on logout
+    useEffect(() => {
+        if (userId) {
+            setReminders(loadFromStorage(`reminders_${userId}`, getInitialReminders()));
+            setCart(loadFromStorage(`cart_${userId}`, []));
+            setReminderTypes(loadFromStorage(`reminderTypes_${userId}`, INITIAL_REMINDER_TYPES));
+            setOrders(loadFromStorage(`orders_${userId}`, []));
+            setSavedRecipes(loadFromStorage(`savedRecipes_${userId}`, []));
+        } else {
+            // Reset state on logout
+            setReminders([]);
+            setCart([]);
+            setReminderTypes([]);
+            setOrders([]);
+            setSavedRecipes([]);
+        }
+    }, [userId]);
     
-    // Save reminders to local storage whenever they change
-    useEffect(() => {
-        try {
-            localStorage.setItem('reminders', JSON.stringify(reminders));
-        } catch (error) {
-            console.error('Error saving reminders to localStorage', error);
-        }
-    }, [reminders]);
-
-    // Save reminder types to local storage whenever they change
-    useEffect(() => {
-        try {
-            localStorage.setItem('reminderTypes', JSON.stringify(reminderTypes));
-        } catch (error) {
-            console.error('Error saving reminder types to localStorage', error);
-        }
-    }, [reminderTypes]);
-
-    // Save saved recipes to local storage
-    useEffect(() => {
-        try {
-            localStorage.setItem('savedRecipes', JSON.stringify(savedRecipes));
-        } catch (error) {
-            console.error('Error saving recipes to localStorage', error);
-        }
-    }, [savedRecipes]);
+    // Effects to save data to localStorage when it changes, using user-specific keys
+    useEffect(() => { if (userId) saveToStorage(`reminders_${userId}`, reminders); }, [reminders, userId]);
+    useEffect(() => { if (userId) saveToStorage(`cart_${userId}`, cart); }, [cart, userId]);
+    useEffect(() => { if (userId) saveToStorage(`reminderTypes_${userId}`, reminderTypes); }, [reminderTypes, userId]);
+    useEffect(() => { if (userId) saveToStorage(`orders_${userId}`, orders); }, [orders, userId]);
+    useEffect(() => { if (userId) saveToStorage(`savedRecipes_${userId}`, savedRecipes); }, [savedRecipes, userId]);
 
 
     const autoGeneratedReminders = useMemo(() => 
@@ -97,12 +105,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     );
 
     useEffect(() => {
-        // On initial app load, request permission for notifications
         requestNotificationPermission();
-        // And schedule notifications for all existing reminders
         reminders.forEach(scheduleNotificationsForReminder);
+        // Clean up notifications for reminders that no longer exist
+        return () => {
+            reminders.forEach(r => cancelNotificationsForReminder(r.id));
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [reminders]); // Rerun only when the whole reminders array changes
 
 
     const addReminder = (reminder: Reminder) => {
@@ -159,7 +169,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const addHolidaysBatch = (holidays: { holidayName: string, date: string }[], country: string) => {
         const newReminders: Reminder[] = [];
         holidays.forEach(holiday => {
-            // Use noon to avoid timezone issues where date might shift by a day
             const holidayDate = new Date(`${holiday.date}T12:00:00`); 
             const reminderExists = reminders.some(r => 
                 r.title.toLowerCase() === holiday.holidayName.toLowerCase() && 
@@ -192,7 +201,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const addToCart = (itemToAdd: Service | CartItem) => {
         setCart(prevCart => {
-            // Handle legacy Service addition
             if ('provider' in itemToAdd) { 
                  const existingItem = prevCart.find(item => item.type === CartItemType.SERVICE && item.item.id === itemToAdd.id) as ServiceCartItem | undefined;
                 if (existingItem) {
@@ -325,7 +333,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     
     const saveRecipe = (recipe: Recipe) => {
         setSavedRecipes(prev => {
-            // Avoid duplicates
             if (prev.some(r => r.id === recipe.id)) {
                 return prev;
             }

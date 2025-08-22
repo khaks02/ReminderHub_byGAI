@@ -1,12 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-const { HashRouter, NavLink, Route, Routes, useLocation } = ReactRouterDOM;
+const { HashRouter, NavLink, Route, Routes, useLocation, Navigate } = ReactRouterDOM;
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
+import { AuthProvider, useAuth } from './hooks/useAuthContext';
 
-import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, Shuffle } from 'lucide-react';
+import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, LogOut } from 'lucide-react';
 import Breadcrumb from './components/Breadcrumb';
+import ProtectedRoute from './components/ProtectedRoute';
 
 import DashboardPage from './pages/DashboardPage';
 import RecipesPage from './pages/RecipesPage';
@@ -14,6 +16,8 @@ import SettingsPage from './pages/SettingsPage';
 import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import ProfilePage from './pages/ProfilePage';
+import LoginPage from './pages/LoginPage';
+import Spinner from './components/Spinner';
 
 interface NavItemProps {
   to: string;
@@ -58,8 +62,8 @@ const HeaderTitle = () => {
     const path = location.pathname.split('/')[1] || 'dashboard';
     
     const titleMapping: { [key: string]: string } = {
-        dashboard: 'Reminders',
-        recipes: 'Recipes',
+        dashboard: "Today's Reminders",
+        recipes: "Today's Recipes",
         settings: 'Settings',
         cart: 'Shopping Cart',
         orders: 'My Orders',
@@ -75,8 +79,11 @@ const HeaderTitle = () => {
 const AppContent = () => {
   const [theme, toggleTheme] = useTheme();
   const { cartCount } = useAppContext();
+  const { logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const navigate = ReactRouterDOM.useNavigate();
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -89,6 +96,11 @@ const AppContent = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  const handleLogout = () => {
+      logout();
+      navigate('/login');
+  };
 
   const ThemeToggle = ({ inMenu = false }: { inMenu?: boolean }) => (
     <button
@@ -105,17 +117,16 @@ const AppContent = () => {
 
 
   return (
-      <HashRouter>
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 h-screen">
             {/* Header */}
-            <header className="sticky top-0 z-10 flex items-center justify-between p-4 h-16 border-b border-gray-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+            <header className="sticky top-0 z-20 flex items-center justify-between p-4 h-16 border-b border-gray-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
                 <div className="flex items-center gap-6">
                     {/* Desktop View: Logo + Nav */}
                     <div className="hidden md:flex items-center gap-6">
                         <h1 className="text-2xl font-bold text-primary">ReminderHub</h1>
                         <nav className="flex items-center gap-2">
-                            <HeaderNavItem to="/">Reminders</HeaderNavItem>
-                            <HeaderNavItem to="/recipes">Recipes</HeaderNavItem>
+                            <HeaderNavItem to="/">Today's Reminders</HeaderNavItem>
+                            <HeaderNavItem to="/recipes">Today's Recipes</HeaderNavItem>
                             <HeaderNavItem to="/orders">My Orders</HeaderNavItem>
                         </nav>
                     </div>
@@ -151,7 +162,7 @@ const AppContent = () => {
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="block px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
-                                    My Profile & Saved Recipes
+                                    My Profile
                                 </NavLink>
                                  <NavLink 
                                     to="/settings" 
@@ -162,15 +173,27 @@ const AppContent = () => {
                                 </NavLink>
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
                                 <ThemeToggle inMenu={true} />
+                                <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                >
+                                    <LogOut size={16}/>
+                                    Logout
+                                </button>
                             </div>
                         )}
                     </div>
                 </div>
             </header>
             
+            {/* Breadcrumb Bar */}
+            <div className="sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
+              <Breadcrumb />
+            </div>
+            
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
-              <Breadcrumb />
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/recipes" element={<RecipesPage />} />
@@ -178,24 +201,55 @@ const AppContent = () => {
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
         </div>
         
         {/* Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)]">
-            <BottomNavItem to="/" icon={<Home size={24} />}>Reminders</BottomNavItem>
-            <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Recipes</BottomNavItem>
+            <BottomNavItem to="/" icon={<Home size={24} />}>Today's Reminders</BottomNavItem>
+            <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Today's Recipes</BottomNavItem>
             <BottomNavItem to="/orders" icon={<ShoppingBag size={24} />}>My Orders</BottomNavItem>
         </nav>
-      </HashRouter>
   );
 };
 
+const AppRoutes = () => {
+    const { loading, currentUser } = useAuth();
+    
+    if (loading) {
+        return (
+            <div className="w-screen h-screen flex justify-center items-center">
+                <Spinner size="12" />
+            </div>
+        );
+    }
+    
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route 
+                path="/*"
+                element={
+                    <ProtectedRoute>
+                        <AppProvider>
+                           <AppContent />
+                        </AppProvider>
+                    </ProtectedRoute>
+                }
+            />
+        </Routes>
+    );
+};
+
+
 const App = () => (
-    <AppProvider>
-        <AppContent />
-    </AppProvider>
+    <HashRouter>
+        <AuthProvider>
+            <AppRoutes />
+        </AuthProvider>
+    </HashRouter>
 );
 
 
