@@ -7,7 +7,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const drinkPairingCache = new Map<string, string>();
 const vendorActionCache = new Map<string, ActivityRecommendation[]>();
 const serviceRecommendationCache = new Map<string, ActivityRecommendation[]>();
-const dailyRecommendationsCache = new Map<boolean, DailyRecommendationResponse>(); // boolean key for isVeg
 let kitchenTipCache: string | null = null;
 
 
@@ -270,11 +269,6 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
 };
 
 export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
-    const cacheKey = isVeg;
-    if (dailyRecommendationsCache.has(cacheKey)) {
-        return dailyRecommendationsCache.get(cacheKey)!;
-    }
-
     const region = "Mumbai, India";
     const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : 'Include a mix of vegetarian and non-vegetarian options.';
     const historyPrompt = history.length > 0 ? `To ensure variety, please DO NOT include any of the following dishes that have been shown recently: ${history.join(', ')}.` : '';
@@ -314,7 +308,6 @@ export const getDailyRecommendations = async (isVeg: boolean, history: string[])
                 }));
             }
         });
-        dailyRecommendationsCache.set(cacheKey, recommendations);
         return recommendations;
     } catch (error: any) {
         console.error("Error getting daily recommendations:", error);
