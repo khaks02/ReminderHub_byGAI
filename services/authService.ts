@@ -1,59 +1,166 @@
 
-import { User } from '../types';
 
-const MOCK_USER: User = {
-    id: 'user-123-alex',
-    name: 'Alex Doe',
-    email: 'alex.doe@example.com',
+import { User } from '../types';
+import { supabase } from './supabaseClient';
+import type { User as SupabaseUser, Provider, AuthResponse, Subscription } from '@supabase/supabase-js';
+
+
+// Helper to map the Supabase user object to our application's User type.
+const mapSupabaseUser = (supabaseUser: SupabaseUser | null): User | null => {
+    if (!supabaseUser) return null;
+    return {
+        id: supabaseUser.id,
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        email: supabaseUser.email || 'No email provided',
+        avatarUrl: supabaseUser.user_metadata?.avatar_url,
+        identities: supabaseUser.identities,
+    };
 };
 
-const USER_SESSION_KEY = 'reminderhub_user_session';
+// Subscribes to Supabase's auth state changes and calls the provided callback.
+export const onAuthStateChange = (callback: (user: User | null) => void): Subscription => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const currentUser = mapSupabaseUser(session?.user ?? null);
+        callback(currentUser);
+    });
+    return subscription;
+};
 
-// --- MOCK API ---
-// This simulates calls to a backend authentication service.
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-export const login = async (
-    method: 'email' | 'google' | 'facebook', 
-    credentials?: { email?: string; password?: string }
-): Promise<User> => {
-    await delay(1000); // Simulate network latency
-
-    if (method === 'email') {
-        if (credentials?.email?.toLowerCase() === MOCK_USER.email && credentials?.password === 'password123') {
-            localStorage.setItem(USER_SESSION_KEY, JSON.stringify(MOCK_USER));
-            return MOCK_USER;
-        } else {
-            throw new Error("Invalid email or password.");
-        }
+// Handles the sign up process.
+export const signup = async ({ email, password, fullName }: { email?: string; password?: string; fullName?: string; }): Promise<User | null> => {
+    if (!email || !password || !fullName) {
+        throw new Error("Full name, email, and password are required for sign up.");
     }
-    
+    const { data, error }: AuthResponse = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
+                full_name: fullName,
+            }
+        }
+    });
+
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Sign up failed, no user returned.");
+
+    // The user is created, but may need to confirm their email.
+    // The onAuthStateChange listener will handle the session.
+    return mapSupabaseUser(data.user);
+};
+
+
+// Handles the login process.
+export const login = async (
+    method: 'email' | 'google' | 'facebook',
+    credentials?: { email?: string; password?: string }
+): Promise<User | void> => {
+    if (method === 'email') {
+        if (!credentials?.email || !credentials?.password) {
+            throw new Error("Email and password are required.");
+        }
+        const { data, error }: AuthResponse = await supabase.auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password,
+        });
+
+        if (error) throw new Error(error.message);
+        if (!data.user) throw new Error("Login failed, no user returned.");
+        
+        const user = mapSupabaseUser(data.user);
+        if (!user) throw new Error("Could not map user data.");
+        return user;
+    }
+
     if (method === 'google' || method === 'facebook') {
-        // In a real app, this would involve a popup and OAuth flow.
-        // We'll simulate a successful login.
-        localStorage.setItem(USER_SESSION_KEY, JSON.stringify(MOCK_USER));
-        return MOCK_USER;
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: method as Provider,
+        });
+        if (error) throw new Error(error.message);
+        // OAuth flow redirects, so we don't return a user here.
+        // The onAuthStateChange listener will pick up the session upon redirect.
+        return;
     }
 
     throw new Error('Unsupported login method.');
 };
 
+// Handles the logout process.
 export const logout = async (): Promise<void> => {
-    await delay(300);
-    localStorage.removeItem(USER_SESSION_KEY);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        console.error("Logout failed", error);
+        throw error;
+    }
 };
 
+// Fetches the current user session from Supabase.
 export const getCurrentUser = async (): Promise<User | null> => {
-    await delay(500); // Simulate checking session validity
-    try {
-        const sessionData = localStorage.getItem(USER_SESSION_KEY);
-        if (sessionData) {
-            return JSON.parse(sessionData) as User;
-        }
-        return null;
-    } catch (error) {
-        console.error("Failed to parse user session", error);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
         return null;
     }
+    return mapSupabaseUser(session.user ?? null);
+};
+
+// Handles linking an OAuth provider to the current user.
+export const linkAccount = async (provider: 'google'): Promise<void> => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+            // Request readonly access to the user's calendar events
+            scopes: 'https_://www.googleapis.com/auth/calendar.events.readonly',
+        },
+    });
+    if (error) throw new Error(error.message);
+    // OAuth flow redirects. The onAuthStateChange listener will handle the updated session.
+};
+
+// Placeholder for unlinking an OAuth provider.
+export const unlinkAccount = async (provider: 'google'): Promise<void> => {
+    // Unlinking a provider securely requires an Edge Function with admin privileges
+    // to call `supabase.auth.admin.unlinkIdentity`. This is a placeholder to show the flow.
+    console.warn(`Unlinking ${provider} is not implemented on the client-side for security reasons.`);
+    alert('Disconnecting accounts is a feature coming soon!');
+    return Promise.resolve();
+};
+
+
+// Handles avatar upload to Supabase Storage.
+export const uploadAvatar = async (file: File, userId: string): Promise<string> => {
+    if (!file) throw new Error('No file provided for upload.');
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+    if (uploadError) {
+        console.error('Avatar upload error:', uploadError);
+        throw new Error('Failed to upload avatar.');
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+    if (!publicUrl) {
+        throw new Error('Could not get public URL for avatar.');
+    }
+
+    const { error: updateUserError } = await supabase.auth.updateUser({
+        data: {
+            avatar_url: publicUrl,
+        }
+    });
+    
+    if (updateUserError) {
+        console.error('Error updating user metadata:', updateUserError);
+        throw new Error('Failed to update user profile with new avatar.');
+    }
+
+    return publicUrl;
 };

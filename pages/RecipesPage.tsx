@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { getRecipes, getDailyRecommendations, shuffleRecipeCategory, getVendorsForRecipeAction, getAiKitchenTip, getDrinkPairing } from '../services/geminiService';
 import { DailyRecommendationResponse, Recipe, ActivityRecommendation, VendorSuggestion, CartItemType, PreparedDishCartItem, IngredientsCartItem, ChefServiceCartItem } from '../types';
@@ -38,9 +39,9 @@ const TabButton = ({ label, isActive, onClick }: { label: string, isActive: bool
 
 
 const RecipesPage: React.FC = () => {
-    const { addToCart, saveRecipe, unsaveRecipe, savedRecipes } = useAppContext();
+    const { addToCart, saveRecipe, unsaveRecipe, savedRecipes, preferences, updatePreferences } = useAppContext();
     const [query, setQuery] = useState('');
-    const [isVeg, setIsVeg] = useState(false);
+    const isVeg = preferences?.recipe_vegetarian_only ?? false;
     const [dailyRecommendations, setDailyRecommendations] = useState<Omit<DailyRecommendationResponse, 'theme'>>({
         breakfast: [], lunch: [], hitea: [], dinner: [], all_time_snacks: [],
     });
@@ -244,7 +245,7 @@ const RecipesPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-4">
                     <label className="flex items-center cursor-pointer">
-                        <input type="checkbox" checked={isVeg} onChange={() => setIsVeg(v => !v)} className="sr-only peer" />
+                        <input type="checkbox" checked={isVeg} onChange={() => updatePreferences({ recipe_vegetarian_only: !isVeg })} className="sr-only peer" />
                         <div className="relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                         <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Veg Only</span>
                     </label>

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Reminder, ActivityRecommendation, VendorSuggestion } from '../types';
-import { getServiceRecommendations, searchForServices } from '../services/geminiService';
-import { ChevronDown, Zap, Clock, MoreVertical, Edit, Trash2, Repeat, CheckSquare, Star, ExternalLink, ShoppingCart, Search, Loader, Share2 } from 'lucide-react';
+import { Reminder, ActivityRecommendation, VendorSuggestion, Recipe } from '../types';
+import { getServiceRecommendations, searchForServices, getRecipesForReminder } from '../services/geminiService';
+import { ChevronDown, Zap, Clock, MoreVertical, Edit, Trash2, Repeat, CheckSquare, Star, ExternalLink, ShoppingCart, Search, Loader, Share2, Utensils, ShoppingBasket } from 'lucide-react';
 import Spinner from './Spinner';
 
 interface ReminderCardProps {
@@ -12,9 +12,10 @@ interface ReminderCardProps {
     onSnooze: (id: string, days: number) => void;
     onComplete: (reminder: Reminder) => void;
     onShowToast: (message: string, type: 'success' | 'error') => void;
+    onAddIngredients: (recipe: Recipe) => void;
 }
 
-const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, onEdit, onDelete, onSnooze, onComplete, onShowToast }) => {
+const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, onEdit, onDelete, onSnooze, onComplete, onShowToast, onAddIngredients }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +23,10 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
     const [error, setError] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<ActivityRecommendation[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+
+    const [recipeIdeas, setRecipeIdeas] = useState<Recipe[]>([]);
+    const [isRecipeLoading, setIsRecipeLoading] = useState(false);
+    const [recipeError, setRecipeError] = useState<string | null>(null);
 
     const fetchRecommendations = useCallback(async () => {
         if (recommendations.length > 0) return;
@@ -50,6 +55,20 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
         } finally {
             setIsSearching(false);
             setSearchQuery('');
+        }
+    };
+
+    const handleFindRecipes = async () => {
+        if (recipeIdeas.length > 0) return;
+        setIsRecipeLoading(true);
+        setRecipeError(null);
+        try {
+            const recipes = await getRecipesForReminder(reminder);
+            setRecipeIdeas(recipes);
+        } catch (err) {
+            setRecipeError('Could not fetch AI recipe ideas.');
+        } finally {
+            setIsRecipeLoading(false);
         }
     };
 
@@ -184,22 +203,29 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                     <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
                         <h4 className="flex items-center font-semibold mb-3">
                             <Zap size={18} className="mr-2 text-yellow-500" />
-                            AI Service Suggestions
+                            AI-Powered Actions
                         </h4>
 
-                        <form onSubmit={handleSearch} className="relative mb-4">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={getPlaceholderForReminder(reminder.type)}
-                                className="w-full pl-4 pr-10 py-2 text-sm rounded-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 focus:ring-1 focus:ring-primary focus:outline-none"
-                                disabled={isSearching}
-                            />
-                             <button type="submit" className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-gray-500 hover:text-primary disabled:text-gray-400" disabled={isSearching || !searchQuery.trim()}>
-                                {isSearching ? <Loader size={16} className="animate-spin"/> : <Search size={16} />}
+                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                            <form onSubmit={handleSearch} className="relative flex-grow">
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder={getPlaceholderForReminder(reminder.type)}
+                                    className="w-full pl-4 pr-10 py-2 text-sm rounded-full bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 focus:ring-1 focus:ring-primary focus:outline-none"
+                                    disabled={isSearching}
+                                />
+                                <button type="submit" className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-gray-500 hover:text-primary disabled:text-gray-400" disabled={isSearching || !searchQuery.trim()}>
+                                    {isSearching ? <Loader size={16} className="animate-spin"/> : <Search size={16} />}
+                                </button>
+                            </form>
+                             <button onClick={handleFindRecipes} className="flex-shrink-0 flex items-center justify-center gap-2 text-sm font-semibold bg-white dark:bg-slate-700 px-4 py-2 rounded-full shadow-sm hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors border border-gray-300 dark:border-slate-600" disabled={isRecipeLoading}>
+                                {isRecipeLoading ? <Loader size={16} className="animate-spin"/> : <Utensils size={16} />}
+                                <span>Find Recipe Ideas</span>
                             </button>
-                        </form>
+                        </div>
+
 
                         {isLoading && <div className="flex justify-center p-4"><Spinner /></div>}
                         {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -240,7 +266,34 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                             </div>
                         )}
                         {!isLoading && !error && recommendations.length === 0 && (
-                           <p className="text-sm text-gray-500">No recommendations available for this reminder.</p>
+                           <p className="text-sm text-gray-500">No service recommendations available. Try searching above.</p>
+                        )}
+                        
+                        {(isRecipeLoading || recipeError || recipeIdeas.length > 0) && <div className="border-t border-gray-200 dark:border-slate-700 my-4"></div>}
+
+                        {isRecipeLoading && <div className="flex justify-center p-4"><Spinner /></div>}
+                        {recipeError && <p className="text-red-500 text-sm">{recipeError}</p>}
+                        {recipeIdeas.length > 0 && (
+                            <div>
+                                <h5 className="font-semibold text-sm mb-2 text-gray-600 dark:text-gray-400">Recipe Ideas</h5>
+                                <div className="space-y-2">
+                                    {recipeIdeas.map(recipe => (
+                                        <div key={recipe.id} className="p-3 bg-slate-200 dark:bg-slate-700 rounded-lg flex justify-between items-center">
+                                            <div>
+                                                <h6 className="font-bold text-sm">{recipe.name}</h6>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400">{recipe.cuisine}</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => onAddIngredients(recipe)}
+                                                className="flex items-center gap-2 text-sm font-semibold bg-white dark:bg-slate-800 px-3 py-1.5 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-slate-900 transition-colors"
+                                            >
+                                                <ShoppingBasket size={16} className="text-green-500" />
+                                                <span>Add Ingredients</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>

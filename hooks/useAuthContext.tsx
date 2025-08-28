@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import { User, AuthContextType } from '../types';
 import * as authService from '../services/authService';
@@ -18,52 +17,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // On initial app load, check for a persisted user session
-        const checkLoggedIn = async () => {
-            try {
-                const user = await authService.getCurrentUser();
-                setCurrentUser(user);
-            } catch (error) {
-                console.error("Session check failed", error);
-                setCurrentUser(null);
-            } finally {
-                setLoading(false);
+        const checkUser = async () => {
+            const user = await authService.getCurrentUser();
+            setCurrentUser(user);
+            setLoading(false);
+        };
+        checkUser();
+
+        const subscription = authService.onAuthStateChange(setCurrentUser);
+
+        return () => {
+            if (subscription && typeof subscription.unsubscribe === 'function') {
+                subscription.unsubscribe();
             }
         };
-        checkLoggedIn();
     }, []);
 
-    const login = useCallback(async (
-        method: 'email' | 'google' | 'facebook', 
-        credentials?: { email?: string; password?: string }
-    ) => {
-        try {
-            setLoading(true);
-            const user = await authService.login(method, credentials);
-            setCurrentUser(user);
-        } catch (error) {
-            // Re-throw the error so the UI component can handle it
-            throw error;
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    const login = useCallback(authService.login, []);
+    const signup = useCallback(authService.signup, []);
+    const logout = useCallback(authService.logout, []);
     
-    const logout = useCallback(async () => {
-        try {
-            await authService.logout();
-            setCurrentUser(null);
-        } catch (error) {
-            console.error("Logout failed", error);
-        }
-    }, []);
+    const uploadAvatar = async (file: File) => {
+        if (!currentUser) throw new Error("User must be logged in to upload an avatar.");
+        const newAvatarUrl = await authService.uploadAvatar(file, currentUser.id);
+        setCurrentUser(prevUser => prevUser ? { ...prevUser, avatarUrl: newAvatarUrl } : null);
+    };
+
+    const linkAccount = useCallback(authService.linkAccount, []);
+    const unlinkAccount = useCallback(authService.unlinkAccount, []);
 
 
     const value: AuthContextType = {
         currentUser,
         loading,
         login,
+        signup,
         logout,
+        uploadAvatar,
+        linkAccount,
+        unlinkAccount,
     };
 
     return (

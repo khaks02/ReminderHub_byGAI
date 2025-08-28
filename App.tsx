@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { HashRouter, NavLink, Route, Routes, useLocation, Navigate } = ReactRouterDOM;
@@ -18,6 +19,7 @@ import OrdersPage from './pages/OrdersPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import Spinner from './components/Spinner';
+import OnboardingModal from './components/OnboardingModal';
 
 interface NavItemProps {
   to: string;
@@ -78,11 +80,20 @@ const HeaderTitle = () => {
 
 const AppContent = () => {
   const [theme, toggleTheme] = useTheme();
-  const { cartCount } = useAppContext();
-  const { logout } = useAuth();
+  const { cartCount, preferences, completeOnboarding } = useAppContext();
+  const { logout, currentUser } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const navigate = ReactRouterDOM.useNavigate();
+  
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    // Show onboarding if preferences are loaded and the tutorial hasn't been completed.
+    if (preferences && !preferences.has_completed_tutorial) {
+      setShowOnboarding(true);
+    }
+  }, [preferences]);
 
 
   useEffect(() => {
@@ -102,6 +113,11 @@ const AppContent = () => {
       navigate('/login');
   };
 
+  const handleFinishOnboarding = () => {
+      completeOnboarding();
+      setShowOnboarding(false);
+  };
+
   const ThemeToggle = ({ inMenu = false }: { inMenu?: boolean }) => (
     <button
       onClick={() => toggleTheme()}
@@ -118,6 +134,7 @@ const AppContent = () => {
 
   return (
         <div className="flex flex-col flex-1 h-screen">
+            <OnboardingModal isOpen={showOnboarding} onFinish={handleFinishOnboarding} />
             {/* Header */}
             <header className="sticky top-0 z-20 flex items-center justify-between p-4 h-16 border-b border-gray-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
                 <div className="flex items-center gap-6">
@@ -153,7 +170,7 @@ const AppContent = () => {
                             className="p-2 rounded-full hover:bg-gray-500/10 transition-colors"
                             aria-label="Open user menu"
                          >
-                            <User />
+                            <img src={currentUser?.avatarUrl || `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(currentUser?.name || 'User')}`} alt="User Avatar" className="w-8 h-8 rounded-full" />
                         </button>
                         {isUserMenuOpen && (
                              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-md shadow-lg z-20 border border-gray-200 dark:border-slate-700 py-1">
@@ -188,7 +205,7 @@ const AppContent = () => {
             </header>
             
             {/* Breadcrumb Bar */}
-            <div className="sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
+            <div className="hidden md:block sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
               <Breadcrumb />
             </div>
             
@@ -216,11 +233,11 @@ const AppContent = () => {
 };
 
 const AppRoutes = () => {
-    const { loading, currentUser } = useAuth();
+    const { loading } = useAuth();
     
     if (loading) {
         return (
-            <div className="w-screen h-screen flex justify-center items-center">
+            <div className="w-screen h-screen flex justify-center items-center bg-bkg-light dark:bg-bkg-dark">
                 <Spinner size="12" />
             </div>
         );

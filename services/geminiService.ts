@@ -1,68 +1,151 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { Reminder, ReminderType, Service, Recipe, RecurrenceRule, ActivityRecommendation, DailyRecommendationResponse } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+import { supabase } from './supabaseClient';
+import { Reminder, ReminderType, Recipe, ActivityRecommendation, DailyRecommendationResponse } from '../types';
 
 // Caches for session-level storage to reduce API calls
 const drinkPairingCache = new Map<string, string>();
 const vendorActionCache = new Map<string, ActivityRecommendation[]>();
 const serviceRecommendationCache = new Map<string, ActivityRecommendation[]>();
+const recipeForReminderCache = new Map<string, Recipe[]>();
 let kitchenTipCache: string | null = null;
 
+// Generic function to call the Gemini API via the Supabase Edge Function proxy
+const invokeGeminiProxy = async (payload: string, config: any) => {
+    try {
+        const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+            body: { payload, config },
+        });
 
-const RECIPE_SCHEMA = {
-    type: Type.OBJECT,
-    properties: {
-        name: { type: Type.STRING },
-        description: { type: Type.STRING },
-        price: { type: Type.NUMBER, description: "Price for one serving of the prepared dish in local currency (e.g., INR)."},
-        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-        isVeg: { type: Type.BOOLEAN },
-        cuisine: { type: Type.STRING },
-        rating: { type: Type.NUMBER },
-        cookTimeInMinutes: { type: Type.INTEGER },
-        servings: { type: Type.INTEGER },
-        deliveryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
-        groceryVendors: { type: Type.ARRAY, items: { type: Type.STRING } },
-        difficulty: { type: Type.STRING, enum: ["Easy", "Medium", "Hard"], description: "The cooking difficulty level." },
-        calories: { type: Type.INTEGER, description: "Estimated calories per serving." },
-    },
-    required: ["name", "description", "price", "ingredients", "instructions", "isVeg", "cuisine", "rating", "cookTimeInMinutes", "servings", "deliveryVendors", "groceryVendors", "difficulty", "calories"]
+        if (error) {
+            console.error('Edge function invocation error:', error);
+            throw new Error('Failed to send a request to the Edge Function');
+        }
+
+        if (data.error) {
+             throw new Error(data.error);
+        }
+        
+        return data.text;
+
+    } catch (e) {
+        console.error("Gemini proxy call failed:", e);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        
+        if (errorMessage.includes('fetch')) {
+             throw new Error("A network error occurred while connecting to the AI service.");
+        }
+        throw new Error(`AI Service Error: ${errorMessage}`);
+    }
 };
 
 
-export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
+// Generic function to process a JSON response from the proxy
+const generateAndParseJson = async (payload: string, config: any) => {
+    const text = await invokeGeminiProxy(payload, config);
+    
+    if (!text) {
+        throw new Error("AI returned an empty response.");
+    }
+    
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. If a field like title or date cannot be determined, omit it from the JSON response. Request: "${prompt}"`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
+        const cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        return JSON.parse(cleanedText);
+    } catch (e) {
+        console.error("JSON parsing failed for AI response:", text, e);
+        throw new Error("The AI returned an unexpected response format. Please try again.");
+    }
+};
+
+// Generic function to get a text response from the proxy
+const generateText = async (payload: string, config: any = {}) => {
+     return await invokeGeminiProxy(payload, config);
+};
+
+// --- JSON Schema Definitions for AI ---
+
+const RECIPE_SCHEMA = {
+    type: "OBJECT",
+    properties: {
+        id: { type: "STRING", description: "A unique ID for the recipe, can be a slugified name." },
+        name: { type: "STRING" },
+        description: { type: "STRING", description: "A brief, enticing description of the dish." },
+        ingredients: { type: "ARRAY", items: { type: "STRING" } },
+        instructions: { type: "ARRAY", items: { type: "STRING" } },
+        imageUrl: { type: "STRING", description: "A placeholder image URL from an API like picsum.photos. The URL should be a direct image link." },
+        isVeg: { type: "BOOLEAN" },
+        cuisine: { type: "STRING" },
+        rating: { type: "NUMBER", description: "A rating out of 5, e.g., 4.5" },
+        cookTimeInMinutes: { type: "INTEGER" },
+        servings: { type: "INTEGER" },
+        price: { type: "NUMBER", description: "Estimated price in INR to order this dish from a restaurant." },
+        deliveryVendors: { type: "ARRAY", items: { type: "STRING" }, description: "List of 2-3 popular Indian food delivery vendor names, e.g., 'Zomato', 'Swiggy'." },
+        groceryVendors: { type: "ARRAY", items: { type: "STRING" }, description: "List of 2-3 popular Indian grocery vendor names, e.g., 'BigBasket', 'Zepto'." },
+        difficulty: { type: "STRING", enum: ["Easy", "Medium", "Hard"] },
+        calories: { type: "INTEGER", description: "Estimated calories per serving." }
+    },
+    required: ["id", "name", "description", "ingredients", "instructions", "isVeg", "cuisine", "rating", "cookTimeInMinutes", "servings", "price", "difficulty", "calories"]
+};
+
+const VENDOR_RECOMMENDATION_SCHEMA = {
+    type: "ARRAY",
+    items: {
+        type: "OBJECT",
+        properties: {
+            activity: { type: "STRING" },
+            vendors: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
                     properties: {
-                        title: { type: Type.STRING, description: "The title of the reminder. Omit if not clear." },
-                        date: { type: Type.STRING, description: "Inferred date in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ). Omit if not clear." },
-                        type: { type: Type.STRING, description: "A category for the reminder, e.g., 'Birthday', 'Meeting', 'Personal Goal'." },
-                        description: { type: Type.STRING, description: "A detailed description." },
-                        recurrenceRule: { 
-                            type: Type.OBJECT,
-                            nullable: true,
-                            properties: {
-                                frequency: { type: Type.STRING, enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']},
-                                interval: { type: Type.INTEGER }
-                            }
-                        }
+                        name: { type: "STRING" },
+                        description: { type: "STRING" },
+                        priceRange: { type: "STRING" },
+                        rating: { type: "NUMBER" },
+                        productQuery: { type: "STRING" },
+                        customerCare: { type: "STRING", description: "Customer care phone number or email." }
                     },
-                    required: ["type", "description"]
+                    required: ["name", "description", "priceRange", "rating", "productQuery"]
                 }
             }
-        });
+        },
+        required: ["activity", "vendors"]
+    }
+};
 
-        const jsonString = response.text.trim();
-        const parsed = JSON.parse(jsonString);
 
+// --- Core AI Service Functions ---
+
+export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
+    try {
+        const payload = `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. If a field like title or date cannot be determined, omit it from the JSON response. Request: "${prompt}"`;
+        const config = {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    title: { type: "STRING", description: "The title of the reminder. Omit if not clear." },
+                    date: { type: "STRING", description: "Inferred date in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ). Omit if not clear." },
+                    type: { type: "STRING", description: "A category for the reminder, e.g., 'Birthday', 'Meeting', 'Personal Goal'." },
+                    description: { type: "STRING", description: "A detailed description." },
+                    recurrenceRule: { 
+                        type: "OBJECT",
+                        nullable: true,
+                        properties: {
+                            frequency: { type: "STRING", enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']},
+                            interval: { type: "INTEGER" }
+                        }
+                    }
+                },
+                required: ["type", "description"]
+            }
+        };
+        const parsed = await generateAndParseJson(payload, config);
+
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            throw new Error("AI returned an invalid object format for the reminder.");
+        }
+        
         return {
             title: parsed.title,
             date: parsed.date ? new Date(parsed.date) : undefined,
@@ -72,13 +155,81 @@ export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Remi
         };
     } catch (error: any) {
         console.error("Error analyzing reminder:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        // On failure, return a partial object. The dashboard will open the modal for completion.
         return { description: prompt };
     }
 };
+
+export type DashboardSuggestionsResponse = {
+    suggestions: Omit<Reminder, 'id'>[];
+    dailyBriefing: string;
+};
+
+export const getDashboardSuggestions = async (existingReminders: Reminder[]): Promise<DashboardSuggestionsResponse> => {
+    const todayReminders = existingReminders.filter(r => new Date(r.date).toDateString() === new Date().toDateString() && !r.is_completed);
+
+    const context = existingReminders.length > 0
+        ? `The user already has these upcoming reminders: ${existingReminders.slice(0, 5).map(r => r.title).join(', ')}.`
+        : 'The user has no upcoming reminders.';
+    
+    const todayContext = todayReminders.length > 0
+        ? `Specifically for today, they have: ${todayReminders.map(r => r.title).join(', ')}.`
+        : "They have a clear schedule for today.";
+
+    const prompt = `Based on the current date of ${new Date().toDateString()}, act as a friendly and proactive assistant for a user in India.
+1. First, write a short, encouraging "Daily Briefing" (around 20-30 words). ${todayContext} The tone should be positive and motivating.
+2. Second, suggest 3 new, relevant, and actionable reminders. ${context} Examples could be bill payments (e.g., "Pay Netflix Bill"), personal tasks (e.g., "Plan weekend trip"), or renewals (e.g., "Check car insurance options"). 
+Provide a title, a future date, a type, and a brief, helpful description for each reminder.`;
+
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: "OBJECT",
+            properties: {
+                dailyBriefing: { type: "STRING", description: "A short, positive daily summary and motivational message for the user." },
+                suggestions: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            title: { type: "STRING" },
+                            date: { type: "STRING", description: "Inferred date in ISO 8601 format." },
+                            type: { type: "STRING" },
+                            description: { type: "STRING" }
+                        },
+                        required: ["title", "date", "type", "description"]
+                    }
+                }
+            },
+            required: ["dailyBriefing", "suggestions"]
+        }
+    };
+
+    try {
+        const { data: result, error } = await supabase.functions.invoke('gemini-suggestions', {
+            body: { prompt, config },
+        });
+
+        if (error) {
+            console.error('Edge function invocation error for suggestions:', error);
+            throw new Error('Failed to send a request to the Edge Function');
+        }
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        if (result && Array.isArray(result.suggestions)) {
+            return {
+                dailyBriefing: result.dailyBriefing,
+                suggestions: result.suggestions.map((s: any) => ({...s, date: new Date(s.date)}))
+            };
+        }
+        return { suggestions: [], dailyBriefing: "Have a great day!" };
+    } catch (error) {
+        console.error("Error getting dashboard suggestions:", error);
+        throw new Error(`AI Service Error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
 
 export const getServiceRecommendations = async (reminder: Reminder): Promise<ActivityRecommendation[]> => {
     const cacheKey = reminder.id;
@@ -87,472 +238,201 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
     }
 
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Based on the reminder titled "${reminder.title}" with description "${reminder.description}", follow these steps:
+        const payload = `Based on the reminder titled "${reminder.title}" with description "${reminder.description}", follow these steps:
 1. Identify 1-2 distinct activities a user might need to perform (e.g., 'Buy a Gift', 'Book a Doctor Appointment').
 2. For each activity, brainstorm a single, generic but searchable product or service query. Example: for 'Buy a Gift' for a birthday, the query could be 'birthday gifts'. For 'Dentist Appointment', it could be 'dental clinics nearby'.
 3. For each activity and its corresponding query, find 2-3 popular Indian vendors that provide this product/service.
-4. For each vendor, provide: their name, a short description, a realistic price range in INR (as a string like "₹100-1000"), a rating out of 5, the product query from step 2, and a customer care contact (phone or email if available).
+4. For each vendor, provide: their name, a short description, a realistic price range in INR (as a string like "₹100-1000"), a rating out of 5, the product query from step 2, and a customer care contact (phone or email if available).`;
+        
+        const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
 
-Example for 'Alice's Birthday':
-[
-  {
-    "activity": "Online Gift Stores",
-    "vendors": [
-      { "name": "Amazon", "description": "Wide range of gifts and electronics.", "priceRange": "₹500-10000", "rating": 4.6, "productQuery": "birthday gifts for friend", "customerCare": "1800-3000-9009" },
-      { "name": "Ferns N Petals", "description": "Flowers, cakes, and personalized gifts.", "priceRange": "₹800-3000", "rating": 4.3, "productQuery": "birthday flowers and cake", "customerCare": "support@fnp.com" }
-    ]
-  },
-  {
-    "activity": "Online Cake Delivery",
-    "vendors": [
-      { "name": "Zomato", "description": "Order from local bakeries.", "priceRange": "₹700-2000", "rating": 4.4, "productQuery": "birthday cake delivery", "customerCare": "support@zomato.com" }
-    ]
-  }
-]`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            activity: { type: Type.STRING },
-                            vendors: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        name: { type: Type.STRING },
-                                        description: { type: Type.STRING },
-                                        priceRange: { type: Type.STRING },
-                                        rating: { type: Type.NUMBER },
-                                        productQuery: { type: Type.STRING },
-                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
-                                    },
-                                    required: ["name", "description", "priceRange", "rating", "productQuery"]
-                                }
-                            }
-                        },
-                        required: ["activity", "vendors"]
-                    }
-                }
-            }
-        });
-        const jsonString = response.text.trim();
-        const recommendations = JSON.parse(jsonString);
+        const recommendations = await generateAndParseJson(payload, config);
+        if (!Array.isArray(recommendations) || (recommendations.length > 0 && (typeof recommendations[0] !== 'object' || !('activity' in recommendations[0])))) {
+            throw new Error("AI returned an invalid format for service recommendations.");
+        }
         serviceRecommendationCache.set(cacheKey, recommendations);
         return recommendations;
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error getting service recommendations:", error);
-         if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-         if (reminder.type.toLowerCase().includes('birthday')) {
-             return [
-                { activity: 'Online Gift Stores', vendors: [
-                    { name: 'Amazon', description: 'Gifts, electronics, and more.', priceRange: '₹500-5000', rating: 4.5, productQuery: 'birthday gifts', customerCare: '1800-3000-9009' },
-                    { name: 'Myntra', description: 'Fashion and lifestyle gifts.', priceRange: '₹1000-4000', rating: 4.3, productQuery: 'gift cards', customerCare: '080-6156-1999' },
-                ]},
-                { activity: 'Online Cake Delivery', vendors: [
-                    { name: 'Swiggy', description: 'Cakes from nearby bakeries.', priceRange: '₹600-1500', rating: 4.4, productQuery: 'birthday cake', customerCare: 'support@swiggy.in' },
-                ]}
-            ];
-        }
-         if (reminder.type.toLowerCase().includes('appointment')) {
-             return [
-                { activity: 'Book Doctor Appointments', vendors: [
-                    { name: 'Practo', description: 'Find doctors and book appointments.', priceRange: '₹300-1500', rating: 4.6, productQuery: 'dentist appointment', customerCare: 'support@practo.com' },
-                    { name: 'Apollo 24/7', description: 'Consult with doctors online.', priceRange: '₹400-1000', rating: 4.4, productQuery: 'online doctor consultation', customerCare: '1860-500-0101' },
-                ]},
-            ];
-        }
-        return [];
+        throw error;
     }
 };
 
-export const searchForServices = async (reminder: Reminder, query: string): Promise<ActivityRecommendation[]> => {
-     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `A user has a reminder titled "${reminder.title}" and is searching for services related to "${query}".
-1. Create a single activity category based on the user's search. e.g., if they search for "pizza", the activity could be "Pizza Delivery".
-2. Find 2-3 popular Indian vendors that match this search.
-3. For each vendor, provide their name, a short description, a realistic price range in INR, a rating out of 5, the user's original query ("${query}") as the productQuery, and a customer care contact.
-4. Return the result in the same JSON format as the initial recommendations.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            activity: { type: Type.STRING },
-                            vendors: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        name: { type: Type.STRING },
-                                        description: { type: Type.STRING },
-                                        priceRange: { type: Type.STRING },
-                                        rating: { type: Type.NUMBER },
-                                        productQuery: { type: Type.STRING },
-                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
-                                    },
-                                    required: ["name", "description", "priceRange", "rating", "productQuery"]
-                                }
-                            }
-                        },
-                        required: ["activity", "vendors"]
-                    }
-                }
-            }
-        });
-        const jsonString = response.text.trim();
-        const recommendations = JSON.parse(jsonString);
-        return recommendations;
-    } catch (error: any) {
-        console.error("Error searching for services:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        return [
-             { activity: `Results for "${query}"`, vendors: [
-                { name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: query, customerCare: 'N/A' },
-            ]}
-        ];
-    }
-};
-
-export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[]> => {
-    // A real app would get user's region dynamically. We'll use a plausible default for demonstration.
-    const region = "Mumbai, India";
+export const extractFollowUpReminder = async (itemName: string, purchaseDate: Date): Promise<{ title: string; date: Date } | null> => {
     try {
-        const dietContext = isVeg 
-            ? 'Ensure all recipes are vegetarian.' 
-            : 'Include a mix of popular vegetarian and non-vegetarian (chicken, lamb, fish) dishes.';
+        const payload = `Analyze the purchased item: "${itemName}". The purchase was made on ${purchaseDate.toDateString()}. 
+        Determine if this item typically requires a future follow-up action like renewal, repurchase, or maintenance (e.g., insurance, subscriptions, warranties, regular check-ups).
+        If a follow-up is highly likely, provide a concise reminder title (e.g., "Renew car insurance") and a calculated future date for the reminder. 
+        If no follow-up is needed, indicate that.`;
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Generate 8 recipes for "${query}". You can include dishes from any world cuisine that are popular in India. ${dietContext} The user is located in ${region}. Based on a simulated real-time web search for that area, provide realistic vendors. For each recipe, provide all details including name, short description, estimated price for one serving in INR, ingredients, instructions, cuisine style, isVeg (boolean), a rating out of 5, cook time in minutes, servings, difficulty level ('Easy', 'Medium', or 'Hard'), and estimated calories per serving. Also include a list of 2-3 popular food delivery vendors (like Zomato, Swiggy) that operate in the user's region, and a list of 2-3 popular grocery delivery vendors (like Instamart, BigBasket, Zepto) available there.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: RECIPE_SCHEMA
-                }
+        const config = {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    requiresFollowUp: { type: "BOOLEAN", description: "Whether a follow-up reminder is needed." },
+                    followUpTitle: { type: "STRING", description: "The title for the follow-up reminder. Omit if not needed." },
+                    followUpDate: { type: "STRING", description: "The suggested future date in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ). Omit if not needed." }
+                },
+                required: ["requiresFollowUp"]
             }
-        });
-
-        const jsonString = response.text.trim();
-        const recipesData = JSON.parse(jsonString);
-
-        // Map recipes and add placeholder images directly, removing image generation to avoid API rate limits.
-        const recipesWithPlaceholders = recipesData.map((r: any, index: number) => ({
-            ...r,
-            id: `${query.replace(/\s/g, '-')}-${index}-${Date.now()}`,
-            rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
-            imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
-        }));
-
-        return recipesWithPlaceholders;
-
-    } catch (error: any) {
-        console.error("Error getting recipes:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        throw new Error("Failed to get AI recipes.");
-    }
-};
-
-export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
-    const region = "Mumbai, India";
-    const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : 'Include a mix of vegetarian and non-vegetarian options.';
-    const historyPrompt = history.length > 0 ? `To ensure variety, please DO NOT include any of the following dishes that have been shown recently: ${history.join(', ')}.` : '';
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `First, pick a creative theme for today's meal plan, like a specific regional Indian cuisine (e.g., 'A Taste of Kerala') or a concept like 'Monsoon Comfort Foods'. Generate a daily meal plan for a user in ${region} based on this theme. The plan should consist of 4 unique recipes for each of the following 5 categories: 'breakfast', 'lunch', 'hitea' (for evening snacks), 'dinner', and 'all_time_snacks'. The theme should be subtly reflected in the choices. ${dietContext} ${historyPrompt} For each recipe, provide all necessary details, including difficulty level ('Easy', 'Medium', 'Hard'), estimated calories per serving, and realistic local vendors for delivery and groceries.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        theme: { type: Type.STRING, description: "The creative theme you chose for the day's meal plan."},
-                        breakfast: { type: Type.ARRAY, items: RECIPE_SCHEMA },
-                        lunch: { type: Type.ARRAY, items: RECIPE_SCHEMA },
-                        hitea: { type: Type.ARRAY, items: RECIPE_SCHEMA },
-                        dinner: { type: Type.ARRAY, items: RECIPE_SCHEMA },
-                        all_time_snacks: { type: Type.ARRAY, items: RECIPE_SCHEMA },
-                    },
-                    required: ["theme", "breakfast", "lunch", "hitea", "dinner", "all_time_snacks"]
-                }
-            }
-        });
-        const jsonString = response.text.trim();
-        const recommendations: DailyRecommendationResponse = JSON.parse(jsonString);
-
-        // Add IDs and placeholder images to all recipes
-        Object.keys(recommendations).forEach(key => {
-            if (key !== 'theme') {
-                const category = key as keyof Omit<DailyRecommendationResponse, 'theme'>;
-                recommendations[category] = recommendations[category].map((r: any, index: number) => ({
-                    ...r,
-                    id: `${category}-${r.name.replace(/\s/g, '-')}-${index}-${Date.now()}`,
-                    rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
-                    imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
-                }));
-            }
-        });
-        return recommendations;
-    } catch (error: any) {
-        console.error("Error getting daily recommendations:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        throw new Error("Failed to get daily AI recipe recommendations.");
-    }
-};
-
-export const shuffleRecipeCategory = async (category: string, isVeg: boolean, history: string[]): Promise<Recipe[]> => {
-    const region = "Mumbai, India";
-    const dietContext = isVeg ? 'All recipes must be strictly vegetarian.' : '';
-    const historyPrompt = history.length > 0 ? `To ensure variety, do not include any of these recently shown dishes: ${history.join(', ')}.` : '';
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Generate 4 new, unique recipes for the meal category '${category}' suitable for a user in ${region}. Include difficulty level ('Easy', 'Medium', or 'Hard') and estimated calories per serving for each. ${dietContext} ${historyPrompt}`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: RECIPE_SCHEMA
-                }
-            }
-        });
-        const jsonString = response.text.trim();
-        const recipesData = JSON.parse(jsonString);
-
-        return recipesData.map((r: any, index: number) => ({
-            ...r,
-            id: `${category}-shuffle-${r.name.replace(/\s/g, '-')}-${index}-${Date.now()}`,
-            rating: Math.min(5, Math.max(3.5, r.rating || 4.5)),
-            imageUrl: `https://picsum.photos/seed/${r.name.replace(/\W/g, '')}/400/300`
-        }));
-
-    } catch (error: any) {
-        console.error(`Error shuffling category ${category}:`, error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy shuffling. Please try again in a moment.");
-        }
-        throw new Error(`Failed to get new ${category} recipes.`);
-    }
-};
-
-export const getVendorsForRecipeAction = async (recipe: Recipe, action: 'Buy Ingredients' | 'Order Online' | 'Hire a Chef'): Promise<ActivityRecommendation[]> => {
-    const cacheKey = `${recipe.id}-${action}`;
-    if (vendorActionCache.has(cacheKey)) {
-        return vendorActionCache.get(cacheKey)!;
-    }
-    
-    try {
-        let actionDescription = '';
-        switch(action) {
-            case 'Buy Ingredients': 
-                actionDescription = `The user wants to buy ingredients to cook "${recipe.name}". Suggest 2-3 popular Indian grocery delivery vendors (like BigBasket, Zepto, Instamart) where they can search for these ingredients. The productQuery should be a simple search term for the ingredients.`;
-                break;
-            case 'Order Online':
-                actionDescription = `The user wants to order the prepared dish "${recipe.name}" online. Suggest 2-3 popular Indian food delivery vendors (like Zomato, Swiggy) where they can find this dish from local restaurants. The productQuery should be the recipe name.`;
-                break;
-            case 'Hire a Chef':
-                actionDescription = `The user wants to hire a professional chef to cook "${recipe.name}". Suggest 2-3 platforms or services in India (like Urban Company, Cookifi) that offer personal chef services. The productQuery should be 'personal chef for home cooking'.`;
-                break;
-        }
-
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `${actionDescription} For each vendor, provide their name, a short description, a realistic price range in INR for the service/product, a rating out of 5, the relevant productQuery, and a customer care contact.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            activity: { type: Type.STRING },
-                            vendors: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        name: { type: Type.STRING },
-                                        description: { type: Type.STRING },
-                                        priceRange: { type: Type.STRING },
-                                        rating: { type: Type.NUMBER },
-                                        productQuery: { type: Type.STRING },
-                                        customerCare: { type: Type.STRING, description: "Customer care phone number or email." }
-                                    },
-                                    required: ["name", "description", "priceRange", "rating", "productQuery"]
-                                }
-                            }
-                        },
-                        required: ["activity", "vendors"]
-                    }
-                }
-            }
-        });
-        const jsonString = response.text.trim();
-        const results = JSON.parse(jsonString);
-        vendorActionCache.set(cacheKey, results); // Cache result
-        return results;
-
-    } catch (error: any) {
-        console.error("Error getting vendors for recipe action:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        return [{
-            activity: `Vendors for ${action}`,
-            vendors: [{ name: 'Google Search', description: 'Could not find specific vendors. Try a web search.', priceRange: 'N/A', rating: 0, productQuery: `${action} for ${recipe.name}`, customerCare: 'N/A' }]
-        }];
-    }
-};
-
-export const getHolidays = async (year: number, country: string, region?: string): Promise<{ holidayName: string; date: string; }[]> => {
-    const location = region ? `${region}, ${country}` : country;
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Generate a list of major public holidays for ${location} for the year ${year}. Include national, regional holidays, and major festivals. Provide only official public holidays.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            holidayName: { type: Type.STRING, description: "The official name of the holiday." },
-                            date: { type: Type.STRING, description: "The date of the holiday in YYYY-MM-DD format." }
-                        },
-                        required: ["holidayName", "date"]
-                    }
-                }
-            }
-        });
-
-        const jsonString = response.text.trim();
-        return JSON.parse(jsonString);
-    } catch (error: any) {
-        console.error(`Error getting holidays for ${location}:`, error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            throw new Error("AI is currently busy. Please try again in a moment.");
-        }
-        throw new Error(`Failed to fetch holidays from AI. Please check the location and try again.`);
-    }
-};
-
-export const extractFollowUpReminder = async (productName: string, purchaseDate: Date): Promise<{ title: string; date: Date } | null> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Analyze the product name and purchase date to identify a relevant follow-up date for warranty expiration, service renewal, or a recurring purchase reminder.
-- Today's date is: ${new Date().toDateString()}.
-- Purchase date was: ${purchaseDate.toDateString()}.
-- Product/Service: "${productName}".
-
-Your task is to:
-1.  Determine if a follow-up reminder is logical. For one-time purchases like 'Pizza Delivery' or 'Cab Ride', no follow-up is needed. For subscriptions, warranties, or items that need refills, a follow-up is needed.
-2.  If a follow-up is needed, create a concise reminder title.
-3.  Calculate the future date for the reminder.
-4.  If no logical follow-up exists, you MUST return an empty JSON object.
-
-Examples:
-- Product "Apple iPhone 15 with 1-year standard warranty", purchased today -> { "title": "Apple iPhone 15 Warranty Expires", "date": "YYYY-MM-DD" } (one year from purchase)
-- Product "Netflix Monthly Subscription", purchased today -> { "title": "Renew Netflix Subscription", "date": "YYYY-MM-DD" } (one month from purchase)
-- Product "Domino's Pizza", purchased today -> {}
-
-Return ONLY a JSON object with 'title' and 'date' (in "YYYY-MM-DD" format), or an empty JSON object if not applicable.`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        date: { type: Type.STRING, description: "The future date in YYYY-MM-DD format." }
-                    },
-                }
-            }
-        });
-
-        const jsonString = response.text.trim();
-        const parsed = JSON.parse(jsonString);
-
-        if (!parsed.title || !parsed.date) {
-            return null;
-        }
-
-        // The model might return a date without time, which JS new Date() interprets as UTC midnight.
-        // Adding time to ensure it's interpreted in the local timezone correctly.
-        return {
-            title: parsed.title,
-            date: new Date(`${parsed.date}T12:00:00`),
         };
 
-    } catch (error: any) {
-        console.error("Error extracting follow-up reminder:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            // Silently fail here as this is a background task and not critical for user flow.
-            return null;
+        const result = await generateAndParseJson(payload, config);
+
+        if (result && result.requiresFollowUp && result.followUpTitle && result.followUpDate) {
+            const followUpDate = new Date(result.followUpDate);
+            if (followUpDate > purchaseDate) {
+                return { title: result.followUpTitle, date: followUpDate };
+            }
         }
+        return null;
+    } catch (error) {
+        console.error("Error extracting follow-up reminder:", error);
         return null;
     }
 };
 
-export const getAiKitchenTip = async (): Promise<string> => {
-    if (kitchenTipCache) {
-        return kitchenTipCache;
-    }
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: "Provide a single, clever, and useful kitchen tip or cooking hack that is not commonly known. Make it concise and easy to understand. Start directly with the tip.",
-        });
-        const tip = response.text.trim();
-        kitchenTipCache = tip;
-        return tip;
-    } catch (error: any) {
-        console.error("Error getting AI kitchen tip:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            return "AI is a bit busy right now, but here's a classic tip: To keep herbs fresh longer, wrap them in a damp paper towel before refrigerating.";
+export const getHolidays = async (year: number, country: string, region: string): Promise<{ holidayName: string; date: string }[]> => {
+    const payload = `List all official public holidays for ${country} ${region ? `(specifically for the region/state of ${region})` : ''} in the year ${year}. Provide the holiday name and the exact date in 'YYYY-MM-DD' format.`;
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: "ARRAY",
+            items: {
+                type: "OBJECT",
+                properties: {
+                    holidayName: { type: "STRING" },
+                    date: { type: "STRING", description: "Date in YYYY-MM-DD format" }
+                },
+                required: ["holidayName", "date"]
+            }
         }
-        return "To keep herbs fresh longer, wrap them in a damp paper towel before refrigerating."; // Fallback tip
+    };
+    const holidays = await generateAndParseJson(payload, config);
+    if (!Array.isArray(holidays)) {
+        throw new Error("AI returned an invalid format for holidays.");
     }
-};
+    return holidays;
+}
+
+export const searchForServices = async (reminder: Reminder, query: string): Promise<ActivityRecommendation[]> => {
+    const payload = `A user has a reminder titled "${reminder.title}" and is now searching for "${query}". 
+    Based on this context, brainstorm one relevant activity and find 2-3 popular Indian vendors for that activity. 
+    Provide vendor name, description, price range (INR), rating (out of 5), the specific product query, and customer care contact.`;
+    const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
+    const results = await generateAndParseJson(payload, config);
+    if (!Array.isArray(results)) {
+        throw new Error("AI returned an invalid format for service search.");
+    }
+    return results;
+}
+
+export const getRecipesForReminder = async (reminder: Reminder): Promise<Recipe[]> => {
+    const cacheKey = `recipe-${reminder.id}`;
+    if (recipeForReminderCache.has(cacheKey)) {
+        return recipeForReminderCache.get(cacheKey)!;
+    }
+    const payload = `A user has a reminder for "${reminder.title}" on ${reminder.date.toDateString()}. Suggest 2-3 suitable and creative recipes for this occasion. Provide full details for each recipe.`;
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
+    };
+    const recipes = await generateAndParseJson(payload, config);
+    if (!Array.isArray(recipes)) {
+        throw new Error("AI returned an invalid format for reminder recipes.");
+    }
+    recipeForReminderCache.set(cacheKey, recipes);
+    return recipes;
+}
+
+export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[]> => {
+    const payload = `Find 8 diverse recipes that match the query: "${query}". The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe, including a placeholder image URL.`;
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
+    };
+    const recipes = await generateAndParseJson(payload, config);
+    if (!Array.isArray(recipes)) {
+        throw new Error("AI returned an invalid format for recipe search.");
+    }
+    return recipes;
+}
+
+export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
+    const historyPrompt = history.length > 0 ? `To ensure variety, avoid suggesting these recipes they've seen recently: ${history.slice(-30).join(', ')}.` : '';
+    const payload = `Act as a creative chef for a user in India. Today's date is ${new Date().toDateString()}.
+1. Create an inspiring theme for today's meals (e.g., 'Monsoon Munchies', 'Healthy Summer Delights').
+2. Based on this theme, suggest 1-2 recipes for each of these categories: breakfast, lunch, hitea, dinner, all_time_snacks.
+3. The user preference is vegetarian-only: ${isVeg}.
+4. ${historyPrompt}
+5. Provide full details for each recipe as per the schema.`;
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: "OBJECT",
+            properties: {
+                theme: { type: "STRING" },
+                breakfast: { type: "ARRAY", items: RECIPE_SCHEMA },
+                lunch: { type: "ARRAY", items: RECIPE_SCHEMA },
+                hitea: { type: "ARRAY", items: RECIPE_SCHEMA },
+                dinner: { type: "ARRAY", items: RECIPE_SCHEMA },
+                all_time_snacks: { type: "ARRAY", items: RECIPE_SCHEMA },
+            },
+            required: ["theme", "breakfast", "lunch", "hitea", "dinner", "all_time_snacks"]
+        }
+    };
+    const recommendations = await generateAndParseJson(payload, config);
+    return recommendations as DailyRecommendationResponse;
+}
+
+export const shuffleRecipeCategory = async (category: string, isVeg: boolean, history: string[]): Promise<Recipe[]> => {
+    const historyPrompt = history.length > 0 ? `Avoid suggesting these recipes they've seen recently: ${history.slice(-30).join(', ')}.` : '';
+    const payload = `Suggest two new recipes for the '${category}' category for a user in India. The user preference is vegetarian-only: ${isVeg}. ${historyPrompt} Provide full details for each recipe.`;
+    const config = {
+        responseMimeType: "application/json",
+        responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
+    };
+    const recipes = await generateAndParseJson(payload, config);
+    if (!Array.isArray(recipes)) {
+        throw new Error("AI returned an invalid format for recipe shuffle.");
+    }
+    return recipes;
+}
+
+export const getVendorsForRecipeAction = async (recipe: Recipe, action: string): Promise<ActivityRecommendation[]> => {
+    const cacheKey = `${recipe.id}-${action}`;
+    if (vendorActionCache.has(cacheKey)) {
+        return vendorActionCache.get(cacheKey)!;
+    }
+    const payload = `For the recipe "${recipe.name}", the user wants to '${action}'.
+1. Brainstorm one activity for this action (e.g., 'Buy Groceries Online', 'Order from Restaurants').
+2. Find 2-3 popular Indian vendors relevant to this activity.
+3. Provide vendor details: name, description, price range (INR), rating (out of 5), a relevant product query, and customer care contact.`;
+    const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
+    const recommendations = await generateAndParseJson(payload, config);
+    if (!Array.isArray(recommendations)) {
+        throw new Error("AI returned an invalid format for vendor recommendations.");
+    }
+    vendorActionCache.set(cacheKey, recommendations);
+    return recommendations;
+}
+
+export const getAiKitchenTip = async (): Promise<string> => {
+    if (kitchenTipCache) return kitchenTipCache;
+    const payload = "Give me a single, clever, and brief kitchen tip or food fact that would be interesting for a home cook in India.";
+    const tip = await generateText(payload);
+    kitchenTipCache = tip;
+    return tip;
+}
 
 export const getDrinkPairing = async (recipeName: string, cuisine: string): Promise<string> => {
-    const cacheKey = recipeName;
+    const cacheKey = `${recipeName}-${cuisine}`;
     if (drinkPairingCache.has(cacheKey)) {
         return drinkPairingCache.get(cacheKey)!;
     }
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `What is an excellent drink pairing (alcoholic or non-alcoholic) for the dish "${recipeName}", which is a part of ${cuisine} cuisine? Provide a single, concise suggestion with a brief reason.`,
-        });
-        const result = response.text.trim();
-        drinkPairingCache.set(cacheKey, result); // Cache result
-        return result;
-    } catch (error: any) {
-        console.error("Error getting drink pairing:", error);
-        if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
-            return "AI is a bit busy right now. Please try again in a moment.";
-        }
-        return "A glass of chilled water or a light lemonade is always a refreshing choice."; // Fallback pairing
-    }
-};
+    const payload = `What is a good non-alcoholic drink pairing for "${recipeName}", which is a ${cuisine} dish? Suggest one creative option and briefly explain why it pairs well.`;
+    const pairing = await generateText(payload);
+    drinkPairingCache.set(cacheKey, pairing);
+    return pairing;
+}

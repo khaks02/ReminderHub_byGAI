@@ -1,10 +1,12 @@
 
+
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo } from 'react';
-import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder } from '../types';
-import { INITIAL_REMINDERS, INITIAL_REMINDER_TYPES, INITIAL_AUTO_REMINDERS } from '../constants';
+import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder, UserPreferences } from '../types';
 import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
 import { extractFollowUpReminder } from '../services/geminiService';
 import { useAuth } from './useAuthContext';
+import { supabase } from '../services/supabaseClient';
+import Spinner from '../components/Spinner';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -28,75 +30,106 @@ const calculateNextOccurrence = (currentDate: Date, rule: RecurrenceRule): Date 
     return newDate;
 };
 
-const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
-    try {
-        const storedValue = localStorage.getItem(key);
-        if (!storedValue) return defaultValue;
-
-        const parsed = JSON.parse(storedValue);
-
-        if ((key.startsWith('reminders') || key.startsWith('orders')) && Array.isArray(parsed)) {
-             // Revive date objects from ISO strings for reminders and orders
-            return parsed.map((item: any) => ({
-                ...item,
-                date: new Date(item.date),
-                 // Also revive follow-up reminder dates inside orders
-                followUpReminders: item.followUpReminders?.map((fu: any) => ({...fu, date: new Date(fu.date)}))
-            })) as T;
-        }
-
-        return parsed as T;
-    } catch (error) {
-        console.error(`Error loading ${key} from localStorage`, error);
-        return defaultValue;
-    }
-};
-
-const saveToStorage = <T,>(key: string, value: T) => {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-        console.error(`Error saving ${key} to localStorage`, error);
-    }
-};
-
-const getInitialReminders = () => [...INITIAL_REMINDERS, ...INITIAL_AUTO_REMINDERS].sort((a, b) => a.date.getTime() - b.date.getTime());
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
     const { currentUser } = useAuth();
     const userId = currentUser?.id;
 
-    // State is now initialized lazily and will be updated based on user login
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [reminderTypes, setReminderTypes] = useState<ReminderType[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
     const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+    const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+    const [loadingData, setLoadingData] = useState(true);
 
-    // Effect to load user data on login or reset on logout
     useEffect(() => {
         if (userId) {
-            setReminders(loadFromStorage(`reminders_${userId}`, getInitialReminders()));
-            setCart(loadFromStorage(`cart_${userId}`, []));
-            setReminderTypes(loadFromStorage(`reminderTypes_${userId}`, INITIAL_REMINDER_TYPES));
-            setOrders(loadFromStorage(`orders_${userId}`, []));
-            setSavedRecipes(loadFromStorage(`savedRecipes_${userId}`, []));
+            setLoadingData(true);
+            const fetchData = async () => {
+                try {
+                    const [remindersRes, typesRes, ordersRes, savedRecipesRes, cartRes, preferencesRes] = await Promise.all([
+                        supabase.from('reminders').select('*').eq('user_id', userId),
+                        supabase.from('reminder_types').select('name').eq('user_id', userId),
+                        supabase.from('orders').select('*').eq('user_id', userId).order('date', { ascending: false }),
+                        supabase.from('saved_recipes').select('recipe_data').eq('user_id', userId),
+                        supabase.from('cart').select('items').eq('user_id', userId).single(),
+                        supabase.from('user_preferences').select('*').eq('user_id', userId).single()
+                    ]);
+
+                    if (remindersRes.error) throw remindersRes.error;
+                    const fetchedReminders = remindersRes.data.map(r => ({...r, date: new Date(r.date)}));
+                    setReminders(fetchedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
+
+                    if (typesRes.error) throw typesRes.error;
+                    setReminderTypes(typesRes.data.map(t => t.name));
+
+                    if (ordersRes.error) throw ordersRes.error;
+                    const fetchedOrders = ordersRes.data.map(o => ({ ...o, date: new Date(o.date) }));
+                    setOrders(fetchedOrders);
+
+                    if (savedRecipesRes.error) throw savedRecipesRes.error;
+                    setSavedRecipes(savedRecipesRes.data.map((r: any) => r.recipe_data));
+
+                    if (cartRes.error && cartRes.error.code !== 'PGRST116') throw cartRes.error; // Ignore "no rows" error
+                    setCart(cartRes.data?.items || []);
+                    
+                    if (preferencesRes.error && preferencesRes.error.code !== 'PGRST116') throw preferencesRes.error;
+                    // If no preferences found, create a default one.
+                    if (!preferencesRes.data) {
+                        const { data: newPreferences, error: newPrefError } = await supabase.from('user_preferences').insert({ user_id: userId }).select().single();
+                        if (newPrefError) throw newPrefError;
+                        setPreferences(newPreferences);
+                    } else {
+                        setPreferences(preferencesRes.data);
+                    }
+
+
+                } catch (error) {
+                    console.error("Error fetching user data from Supabase:", error);
+                } finally {
+                    setLoadingData(false);
+                }
+            };
+            fetchData();
+            
+            // --- Real-time Subscription ---
+            const channel = supabase.channel(`public:reminders:user_id=eq.${userId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, async () => {
+                     // Refetch all reminders to ensure consistency
+                     const { data, error } = await supabase.from('reminders').select('*').eq('user_id', userId);
+                     if (error) console.error('Error refetching reminders:', error);
+                     else {
+                         const updatedReminders = data.map(r => ({ ...r, date: new Date(r.date) }));
+                         setReminders(updatedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
+                     }
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+
         } else {
-            // Reset state on logout
             setReminders([]);
             setCart([]);
             setReminderTypes([]);
             setOrders([]);
             setSavedRecipes([]);
+            setPreferences(null);
+            setLoadingData(false);
         }
     }, [userId]);
     
-    // Effects to save data to localStorage when it changes, using user-specific keys
-    useEffect(() => { if (userId) saveToStorage(`reminders_${userId}`, reminders); }, [reminders, userId]);
-    useEffect(() => { if (userId) saveToStorage(`cart_${userId}`, cart); }, [cart, userId]);
-    useEffect(() => { if (userId) saveToStorage(`reminderTypes_${userId}`, reminderTypes); }, [reminderTypes, userId]);
-    useEffect(() => { if (userId) saveToStorage(`orders_${userId}`, orders); }, [orders, userId]);
-    useEffect(() => { if (userId) saveToStorage(`savedRecipes_${userId}`, savedRecipes); }, [savedRecipes, userId]);
+    useEffect(() => {
+        if (userId && !loadingData) {
+            const saveCart = async () => {
+                const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart }, { onConflict: 'user_id' });
+                if (error) console.error('Error saving cart:', error);
+            };
+            saveCart();
+        }
+    }, [cart, userId, loadingData]);
 
 
     const autoGeneratedReminders = useMemo(() => 
@@ -107,67 +140,91 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         requestNotificationPermission();
         reminders.forEach(scheduleNotificationsForReminder);
-        // Clean up notifications for reminders that no longer exist
         return () => {
             reminders.forEach(r => cancelNotificationsForReminder(r.id));
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reminders]); // Rerun only when the whole reminders array changes
+    }, [reminders]);
 
 
-    const addReminder = (reminder: Reminder) => {
-        setReminders(prev => {
-            const newReminders = [reminder, ...prev].sort((a, b) => a.date.getTime() - b.date.getTime());
-            scheduleNotificationsForReminder(reminder);
-            return newReminders;
-        });
+    const addReminder = async (reminder: Omit<Reminder, 'id' | 'user_id'>) => {
+        if (!userId) throw new Error("User not authenticated.");
+        
+        const reminderToInsert = { ...reminder, user_id: userId };
+
+        const { data, error } = await supabase
+            .from('reminders')
+            .insert(reminderToInsert)
+            .select()
+            .single();
+        
+        if (error) {
+            console.error('Error adding reminder:', error);
+            throw new Error(`Failed to add reminder: ${error.message}`);
+        }
+        
+        const newReminder = { ...data, date: new Date(data.date) } as Reminder;
+        scheduleNotificationsForReminder(newReminder);
     };
 
-    const deleteReminder = (id: string) => {
-        setReminders(prev => prev.filter(r => r.id !== id));
+    const deleteReminder = async (id: string) => {
+        if (!userId) return;
+        const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', userId);
+        if (error) { console.error('Error deleting reminder:', error); return; }
         cancelNotificationsForReminder(id);
     };
 
-    const updateReminder = (id: string, updates: Partial<Reminder>) => {
-        setReminders(prev => {
-             const updatedReminders = prev.map(r => r.id === id ? { ...r, ...updates } : r).sort((a,b) => a.date.getTime() - b.date.getTime());
-             const updatedReminder = updatedReminders.find(r => r.id === id);
-             if (updatedReminder) {
-                scheduleNotificationsForReminder(updatedReminder);
-            }
-            return updatedReminders;
-        });
+    const updateReminder = async (id: string, updates: Partial<Reminder>) => {
+        if (!userId) throw new Error("User not authenticated.");
+        
+        const { data, error } = await supabase
+            .from('reminders')
+            .update(updates)
+            .eq('id', id)
+            .eq('user_id', userId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating reminder:', error);
+            throw new Error(`Failed to update reminder: ${error.message}`);
+        }
+        
+        const updatedReminder = { ...data, date: new Date(data.date) } as Reminder;
+        scheduleNotificationsForReminder(updatedReminder);
     };
 
     const completeReminder = (id: string) => {
         const reminder = reminders.find(r => r.id === id);
         if (!reminder) return;
 
-        cancelNotificationsForReminder(id); // Always cancel old notifications
+        cancelNotificationsForReminder(id);
 
-        if (reminder.recurrenceRule) {
-            const newDate = calculateNextOccurrence(reminder.date, reminder.recurrenceRule);
-            // updateReminder will handle rescheduling the new notifications
-            updateReminder(id, { date: newDate });
-        } else {
-            // isCompleted state will prevent notifications from being scheduled
-            updateReminder(id, { isCompleted: true });
-        }
-    };
+        const promise = reminder.recurrenceRule
+            ? updateReminder(id, { date: calculateNextOccurrence(reminder.date, reminder.recurrenceRule), is_completed: false })
+            : updateReminder(id, { is_completed: true });
 
-    const addReminderType = (newType: ReminderType) => {
-        setReminderTypes(prev => {
-            const upperCasePrev = prev.map(t => t.toUpperCase().trim());
-            const upperCaseNew = newType.toUpperCase().trim();
-            if (upperCaseNew && !upperCasePrev.includes(upperCaseNew)) {
-                return [...prev, newType.trim()].sort();
-            }
-            return prev;
+        promise.catch(err => {
+            console.error("Failed to complete reminder:", err);
+            // Optionally: revert UI state or show an error to the user
         });
     };
+
+    const addReminderType = async (newType: ReminderType) => {
+        if (!userId) return;
+        const upperCasePrev = reminderTypes.map(t => t.toUpperCase().trim());
+        const upperCaseNew = newType.toUpperCase().trim();
+        if (!upperCaseNew || upperCasePrev.includes(upperCaseNew)) return;
+        
+        const { error } = await supabase.from('reminder_types').insert({ user_id: userId, name: newType.trim() });
+        if (error) { console.error('Error adding reminder type:', error); return; }
+
+        setReminderTypes(prev => [...prev, newType.trim()].sort());
+    };
     
-    const addHolidaysBatch = (holidays: { holidayName: string, date: string }[], country: string) => {
-        const newReminders: Reminder[] = [];
+    const addHolidaysBatch = async (holidays: { holidayName: string, date: string }[], country: string): Promise<number> => {
+        if (!userId) return 0;
+        
+        const newRemindersToInsert: Omit<Reminder, 'id'>[] = [];
         holidays.forEach(holiday => {
             const holidayDate = new Date(`${holiday.date}T12:00:00`); 
             const reminderExists = reminders.some(r => 
@@ -176,26 +233,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             );
 
             if (!reminderExists) {
-                const newReminder: Reminder = {
-                    id: `rem-holiday-${Date.now()}-${Math.random()}`,
+                newRemindersToInsert.push({
                     title: holiday.holidayName,
                     date: holidayDate,
                     type: 'Holiday',
                     description: `Public holiday in ${country}.`,
-                    isCompleted: false,
-                };
-                newReminders.push(newReminder);
+                    is_completed: false,
+                    user_id: userId
+                });
             }
         });
 
-        if (newReminders.length > 0) {
-            setReminders(prev => {
-                const updatedReminders = [...prev, ...newReminders].sort((a, b) => a.date.getTime() - b.date.getTime());
-                newReminders.forEach(scheduleNotificationsForReminder);
-                return updatedReminders;
-            });
+        if (newRemindersToInsert.length > 0) {
+            const { data, error } = await supabase.from('reminders').insert(newRemindersToInsert).select();
+            if (error) { console.error('Error adding holidays:', error); return 0; }
+            
+            const addedReminders = data.map(r => ({...r, date: new Date(r.date)}));
+            addedReminders.forEach(scheduleNotificationsForReminder);
+            return addedReminders.length;
         }
-        return newReminders.length;
+        return 0;
     };
 
 
@@ -278,33 +335,39 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             extractFollowUpReminder(getItemNameForOrder(item), order.date)
         );
         const results = await Promise.all(followUpPromises);
-        const validFollowUps = results.filter(Boolean);
+        const validFollowUps = results.filter((followUp): followUp is { title: string; date: Date } => !!followUp);
 
         if (validFollowUps.length > 0) {
-            validFollowUps.forEach(followUp => {
-                if (followUp) {
-                    const newReminder: Reminder = {
-                        id: `rem-auto-${Date.now()}-${Math.random()}`,
+            for (const followUp of validFollowUps) {
+                try {
+                    const newReminder: Omit<Reminder, 'id' | 'user_id'> = {
                         title: followUp.title,
                         date: followUp.date,
                         type: 'Renewal',
                         description: `Automatically added from order #${order.id.slice(-6)}`,
-                        isCompleted: false,
+                        is_completed: false,
                         source: 'Purchase',
                     };
-                    addReminder(newReminder);
+                    await addReminder(newReminder);
+                } catch (err) {
+                    console.error("Failed to add follow-up reminder:", err);
                 }
-            });
+            }
 
-            setOrders(prevOrders => prevOrders.map(o => 
-                o.id === order.id ? { ...o, followUpReminders: validFollowUps.filter(f => f !== null) as any[] } : o
-            ));
+            const updatedOrderPayload = { ...order, followUpReminders: validFollowUps };
+            const { error } = await supabase.from('orders').update(updatedOrderPayload).eq('id', order.id);
+            if(error) console.error("Error updating order with follow-ups:", error);
+            else {
+                 setOrders(prevOrders => prevOrders.map(o => 
+                    o.id === order.id ? updatedOrderPayload : o
+                ));
+            }
         }
     };
 
 
-    const checkout = () => {
-        if (cart.length === 0) return;
+    const checkout = async () => {
+        if (cart.length === 0 || !userId) return;
         const total = cart.reduce((acc, item) => {
             let itemPrice = 0;
             switch (item.type) {
@@ -318,30 +381,79 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         const firstItemWithReminder = cart.find(item => item.reminderId && item.reminderTitle);
 
-        const newOrder: Order = {
-            id: `order-${Date.now()}`,
+        const newOrder: Omit<Order, 'id'> = {
             date: new Date(),
             items: cart,
             total,
             reminderId: firstItemWithReminder?.reminderId,
             reminderTitle: firstItemWithReminder?.reminderTitle,
+            user_id: userId
         };
-        setOrders(prev => [newOrder, ...prev]);
+        
+        const { data, error } = await supabase.from('orders').insert(newOrder).select().single();
+        if (error) { console.error('Error creating order:', error); return; }
+
+        const createdOrder = { ...data, date: new Date(data.date) };
+        setOrders(prev => [createdOrder, ...prev]);
         clearCart();
-        analyzeOrderForFollowUps(newOrder);
+        analyzeOrderForFollowUps(createdOrder);
     };
     
-    const saveRecipe = (recipe: Recipe) => {
-        setSavedRecipes(prev => {
-            if (prev.some(r => r.id === recipe.id)) {
-                return prev;
-            }
-            return [recipe, ...prev];
+    const saveRecipe = async (recipe: Recipe) => {
+        if (!userId || savedRecipes.some(r => r.id === recipe.id)) return;
+        
+        const { error } = await supabase.from('saved_recipes').insert({
+            user_id: userId,
+            recipe_id: recipe.id,
+            recipe_data: recipe
         });
+
+        if (error) { console.error('Error saving recipe:', error); return; }
+
+        setSavedRecipes(prev => [recipe, ...prev]);
     };
 
-    const unsaveRecipe = (recipeId: string) => {
+    const unsaveRecipe = async (recipeId: string) => {
+        if (!userId) return;
+        
+        const { error } = await supabase.from('saved_recipes').delete()
+            .eq('user_id', userId)
+            .eq('recipe_id', recipeId);
+        
+        if (error) { console.error('Error unsaving recipe:', error); return; }
+
         setSavedRecipes(prev => prev.filter(r => r.id !== recipeId));
+    };
+
+    const updatePreferences = async (updates: Partial<Omit<UserPreferences, 'user_id'>>) => {
+        if (!userId) return;
+
+        const { data, error } = await supabase
+            .from('user_preferences')
+            .upsert({ user_id: userId, ...updates })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating preferences:', error);
+            return;
+        }
+        setPreferences(data);
+    };
+
+    const completeOnboarding = async () => {
+        if (!userId) return;
+        const { data, error } = await supabase
+            .from('user_preferences')
+            .upsert({ user_id: userId, has_completed_tutorial: true })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error completing onboarding:', error);
+            return;
+        }
+        setPreferences(data);
     };
 
     const value: AppContextType = {
@@ -365,11 +477,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         savedRecipes,
         saveRecipe,
         unsaveRecipe,
+        preferences,
+        updatePreferences,
+        completeOnboarding,
     };
 
     return (
         <AppContext.Provider value={value}>
-            {children}
+            {!loadingData ? children : (
+                <div className="w-full h-full flex justify-center items-center">
+                    <Spinner size="12" />
+                </div>
+            )}
         </AppContext.Provider>
     );
 };

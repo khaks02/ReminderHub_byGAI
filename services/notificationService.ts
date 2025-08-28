@@ -59,7 +59,7 @@ const showNotification = async (reminder: Reminder, body: string) => {
 
 export const scheduleNotificationsForReminder = (reminder: Reminder) => {
     // Do not schedule notifications if permission isn't granted, the date is invalid, or the reminder is already completed.
-    if (Notification.permission !== 'granted' || !reminder.date || reminder.isCompleted) {
+    if (Notification.permission !== 'granted' || !reminder.date || reminder.is_completed) {
         return;
     }
 

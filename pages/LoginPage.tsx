@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import Spinner from '../components/Spinner';
 
 const GoogleIcon = () => (
@@ -21,10 +21,13 @@ const FacebookIcon = () => (
 
 
 const LoginPage: React.FC = () => {
-    const { login, loading } = useAuth();
+    const { login, signup, loading } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
     const location = ReactRouterDOM.useLocation();
 
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [fullName, setFullName] = useState('');
+    // Pre-filled for demonstration purposes
     const [email, setEmail] = useState('alex.doe@example.com');
     const [password, setPassword] = useState('password123');
     const [showPassword, setShowPassword] = useState(false);
@@ -35,15 +38,22 @@ const LoginPage: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        if (!email || !password) {
-            setError("Email and password are required.");
+        if (!email || !password || (isSignUp && !fullName)) {
+            setError("All fields are required.");
             return;
         }
         try {
-            await login('email', { email, password });
-            navigate(from, { replace: true });
+            if (isSignUp) {
+                await signup({ email, password, fullName });
+                // Supabase sends a confirmation email, inform the user
+                alert("Sign up successful! Please check your email to confirm your account.");
+                setIsSignUp(false); // Switch back to login form
+            } else {
+                await login('email', { email, password });
+                navigate(from, { replace: true });
+            }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "An unknown login error occurred.");
+            setError(err instanceof Error ? err.message : "An unknown authentication error occurred.");
         }
     };
     
@@ -62,13 +72,36 @@ const LoginPage: React.FC = () => {
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-primary">ReminderHub AI</h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Sign in to access your intelligent dashboard.</p>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2">
+                        {isSignUp ? 'Create your account' : 'Sign in to access your intelligent dashboard.'}
+                    </p>
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {error && <p className="text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md text-sm text-center">{error}</p>}
                         
+                        {isSignUp && (
+                             <div>
+                                <label htmlFor="fullName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
+                                <div className="mt-1 relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                        <User size={18} />
+                                    </div>
+                                    <input
+                                        id="fullName"
+                                        type="text"
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                        placeholder="Alex Doe"
+                                        className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 pl-10 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition"
+                                        required
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                              <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
                              <div className="mt-1 relative">
@@ -99,6 +132,7 @@ const LoginPage: React.FC = () => {
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
                                     className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition"
                                     required
                                     disabled={loading}
@@ -113,10 +147,6 @@ const LoginPage: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-
-                        <div className="flex items-center justify-between">
-                            <a href="#" className="text-sm text-primary hover:underline">Forgot password?</a>
-                        </div>
                         
                         <div>
                              <button
@@ -124,7 +154,7 @@ const LoginPage: React.FC = () => {
                                 className="w-full flex justify-center items-center px-4 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed"
                                 disabled={loading}
                             >
-                                {loading ? <Spinner size="5" /> : 'Sign In'}
+                                {loading ? <Spinner size="5" /> : (isSignUp ? 'Create Account' : 'Sign In')}
                             </button>
                         </div>
                     </form>
@@ -154,6 +184,12 @@ const LoginPage: React.FC = () => {
                         >
                             <FacebookIcon />
                             <span className="text-sm font-medium">Facebook</span>
+                        </button>
+                    </div>
+
+                     <div className="text-center mt-6">
+                        <button onClick={() => { setIsSignUp(s => !s); setError(null); }} className="text-sm text-primary hover:underline">
+                            {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
                         </button>
                     </div>
                 </div>

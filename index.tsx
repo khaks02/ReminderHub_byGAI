@@ -6,7 +6,9 @@ import App from './App';
 // Register Service Worker for notifications
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Construct an absolute URL to avoid potential origin issues in sandboxed environments.
+    // In certain sandboxed or iframe-based environments, relative paths for service
+    // workers can be misinterpreted. To ensure the correct origin, we construct
+    // the full, absolute URL to the service worker script.
     const swUrl = `${window.location.origin}/sw.js`;
     navigator.serviceWorker.register(swUrl)
       .then(registration => {
