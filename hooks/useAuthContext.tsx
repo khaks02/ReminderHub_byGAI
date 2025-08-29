@@ -1,6 +1,9 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+
+
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { User, AuthContextType } from '../types';
 import * as authService from '../services/authService';
+import type { Subscription } from '@supabase/supabase-js';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -22,20 +25,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setCurrentUser(user);
             setLoading(false);
         };
+        
         checkUser();
 
-        const subscription = authService.onAuthStateChange(setCurrentUser);
+        const subscription: Subscription = authService.onAuthStateChange(setCurrentUser);
 
+        // Cleanup subscription on unmount
         return () => {
             if (subscription && typeof subscription.unsubscribe === 'function') {
                 subscription.unsubscribe();
             }
         };
     }, []);
-
-    const login = useCallback(authService.login, []);
-    const signup = useCallback(authService.signup, []);
-    const logout = useCallback(authService.logout, []);
     
     const uploadAvatar = async (file: File) => {
         if (!currentUser) throw new Error("User must be logged in to upload an avatar.");
@@ -43,19 +44,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(prevUser => prevUser ? { ...prevUser, avatarUrl: newAvatarUrl } : null);
     };
 
-    const linkAccount = useCallback(authService.linkAccount, []);
-    const unlinkAccount = useCallback(authService.unlinkAccount, []);
-
 
     const value: AuthContextType = {
         currentUser,
         loading,
-        login,
-        signup,
-        logout,
+        login: authService.login,
+        signup: authService.signup,
+        logout: authService.logout,
         uploadAvatar,
-        linkAccount,
-        unlinkAccount,
+        linkAccount: authService.linkAccount,
+        unlinkAccount: authService.unlinkAccount,
     };
 
     return (

@@ -1,11 +1,10 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Register Service Worker for notifications
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+// Function to register the service worker
+const registerServiceWorker = () => {
+  if ('serviceWorker' in navigator) {
     // In certain sandboxed or iframe-based environments, relative paths for service
     // workers can be misinterpreted. To ensure the correct origin, we construct
     // the full, absolute URL to the service worker script.
@@ -17,7 +16,16 @@ if ('serviceWorker' in navigator) {
       .catch(error => {
         console.log('ServiceWorker registration failed: ', error);
       });
-  });
+  }
+};
+
+// The 'load' event might have already fired.
+// We check the document.readyState. If it's 'complete', we can register immediately.
+// Otherwise, we wait for the 'load' event.
+if (document.readyState === 'complete') {
+  registerServiceWorker();
+} else {
+  window.addEventListener('load', registerServiceWorker);
 }
 
 

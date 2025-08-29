@@ -1,13 +1,77 @@
 
+
+
+
+
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useAppContext } from '../hooks/useAppContext';
 import { CartItemType } from '../types';
+import { getAnalyticsInsights } from '../services/geminiService';
+import Spinner from '../components/Spinner';
+import { Bot, Zap } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF19A3'];
 
+const AiInsightRenderer = ({ content }: { content: string }) => {
+    const lines = content.split('\n');
+    const elements: JSX.Element[] = [];
+    let listItems: string[] = [];
+
+    const flushList = () => {
+        if (listItems.length > 0) {
+            elements.push(
+                <ul key={`ul-${elements.length}`} className="list-disc pl-5 space-y-1">
+                    {listItems.map((item, idx) => <li key={idx}>{item}</li>)}
+                </ul>
+            );
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('#')) {
+            flushList();
+            const level = trimmedLine.match(/^#+/)?.[0].length || 1;
+            const text = trimmedLine.replace(/^#+\s*/, '');
+            const Tag = `h${Math.min(level + 2, 6)}` as keyof JSX.IntrinsicElements;
+            elements.push(<Tag key={index} className="font-bold my-3 flex items-center gap-2"><Bot size={18} className="text-primary"/>{text}</Tag>);
+        } else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+            listItems.push(trimmedLine.substring(2));
+        } else {
+            flushList();
+            if (trimmedLine) {
+                elements.push(<p key={index}>{trimmedLine}</p>);
+            }
+        }
+    });
+
+    flushList(); // Add any remaining list items
+
+    return <div className="space-y-2">{elements}</div>;
+};
+
+
 const AnalyticsPage: React.FC = () => {
     const { reminders, orders } = useAppContext();
+    const [insights, setInsights] = React.useState<string | null>(null);
+    const [isInsightsLoading, setIsInsightsLoading] = React.useState(false);
+    const [insightsError, setInsightsError] = React.useState<string | null>(null);
+
+    const handleGenerateInsights = async () => {
+        setIsInsightsLoading(true);
+        setInsightsError(null);
+        setInsights(null);
+        try {
+            const result = await getAnalyticsInsights(reminders, orders);
+            setInsights(result);
+        } catch (err) {
+            setInsightsError(err instanceof Error ? err.message : 'Failed to get AI insights. Please try again later.');
+        } finally {
+            setIsInsightsLoading(false);
+        }
+    };
 
     const reminderData = React.useMemo(() => {
         if (!reminders || reminders.length === 0) return [];
@@ -116,9 +180,32 @@ const AnalyticsPage: React.FC = () => {
                     </div>
                 </div>
             </div>
-             <div className="mt-8 p-10 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-300 dark:border-slate-700">
-                <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">More Advanced Analytics Coming Soon</h2>
-                <p className="text-gray-500 dark:text-gray-400 mt-2">Future updates will include insights into AI recommendation effectiveness, spending patterns, and personal productivity metrics.</p>
+             <div className="mt-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+                <div className="flex justify-between items-start">
+                    <h2 className="text-xl font-semibold mb-4">AI-Powered Insights</h2>
+                    {!insights && !isInsightsLoading && (
+                         <button 
+                            onClick={handleGenerateInsights}
+                            className="flex items-center gap-2 bg-primary text-white font-bold py-2 px-4 rounded-md hover:bg-primary-dark transition-colors text-sm"
+                            disabled={isInsightsLoading}
+                        >
+                            <Zap size={16}/> Generate Analysis
+                        </button>
+                    )}
+                </div>
+
+                {isInsightsLoading && (
+                    <div className="flex flex-col items-center justify-center p-8">
+                        <Spinner size="8" />
+                        <p className="mt-4 text-gray-500 dark:text-gray-400">AI is analyzing your data...</p>
+                    </div>
+                )}
+                 {insightsError && <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{insightsError}</p>}
+                 {insights && (
+                     <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg prose dark:prose-invert prose-sm max-w-none animate-fade-in">
+                        <AiInsightRenderer content={insights} />
+                     </div>
+                 )}
             </div>
         </div>
     );

@@ -1,5 +1,9 @@
 
 
+
+
+
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
@@ -12,9 +16,10 @@ import VendorModal from '../components/VendorModal';
 import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion, Recipe, IngredientsCartItem } from '../types';
 import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import Spinner from '../components/Spinner';
 const { NavLink } = ReactRouterDOM;
+import Spinner from '../components/Spinner';
 
 // Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
 const toDateKey = (date: Date) => {

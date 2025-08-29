@@ -1,6 +1,12 @@
 
+
+
+
+
 import React, { useState } from 'react';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
+const { useNavigate, useLocation } = ReactRouterDOM;
 import { useAuth } from '../hooks/useAuthContext';
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import Spinner from '../components/Spinner';
@@ -22,14 +28,13 @@ const FacebookIcon = () => (
 
 const LoginPage: React.FC = () => {
     const { login, signup, loading } = useAuth();
-    const navigate = ReactRouterDOM.useNavigate();
-    const location = ReactRouterDOM.useLocation();
+    const navigate = useNavigate();
+    const location = useLocation();
 
     const [isSignUp, setIsSignUp] = useState(false);
     const [fullName, setFullName] = useState('');
-    // Pre-filled for demonstration purposes
-    const [email, setEmail] = useState('alex.doe@example.com');
-    const [password, setPassword] = useState('password123');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +122,7 @@ const LoginPage: React.FC = () => {
                                     className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 pl-10 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition"
                                     required
                                     disabled={loading}
+                                    autoComplete="email"
                                 />
                              </div>
                         </div>
@@ -136,6 +142,7 @@ const LoginPage: React.FC = () => {
                                     className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none transition"
                                     required
                                     disabled={loading}
+                                    autoComplete={isSignUp ? "new-password" : "current-password"}
                                 />
                                 <button
                                     type="button"

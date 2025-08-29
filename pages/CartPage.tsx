@@ -1,8 +1,11 @@
 
+
+
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, ConciergeBell } from 'lucide-react';
 import { CartItem, CartItemType, ServiceCartItem, PreparedDishCartItem, VendorProductCartItem } from '../types';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
 const { NavLink } = ReactRouterDOM;
 

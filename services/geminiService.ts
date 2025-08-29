@@ -1,7 +1,7 @@
 
 
 import { supabase } from './supabaseClient';
-import { Reminder, ReminderType, Recipe, ActivityRecommendation, DailyRecommendationResponse } from '../types';
+import { Reminder, ReminderType, Recipe, ActivityRecommendation, DailyRecommendationResponse, Order } from '../types';
 
 // Caches for session-level storage to reduce API calls
 const drinkPairingCache = new Map<string, string>();
@@ -11,15 +11,15 @@ const recipeForReminderCache = new Map<string, Recipe[]>();
 let kitchenTipCache: string | null = null;
 
 // Generic function to call the Gemini API via the Supabase Edge Function proxy
-const invokeGeminiProxy = async (payload: string, config: any) => {
+const invokeGeminiProxy = async (prompt: string, config: any) => {
     try {
         const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-            body: { payload, config },
+            body: { prompt, config },
         });
 
         if (error) {
             console.error('Edge function invocation error:', error);
-            throw new Error('Failed to send a request to the Edge Function');
+            throw new Error(`Edge function invocation failed: ${error.message}`);
         }
 
         if (data.error) {
@@ -41,8 +41,8 @@ const invokeGeminiProxy = async (payload: string, config: any) => {
 
 
 // Generic function to process a JSON response from the proxy
-const generateAndParseJson = async (payload: string, config: any) => {
-    const text = await invokeGeminiProxy(payload, config);
+const generateAndParseJson = async (prompt: string, config: any) => {
+    const text = await invokeGeminiProxy(prompt, config);
     
     if (!text) {
         throw new Error("AI returned an empty response.");
@@ -58,8 +58,8 @@ const generateAndParseJson = async (payload: string, config: any) => {
 };
 
 // Generic function to get a text response from the proxy
-const generateText = async (payload: string, config: any = {}) => {
-     return await invokeGeminiProxy(payload, config);
+const generateText = async (prompt: string, config: any = {}) => {
+     return await invokeGeminiProxy(prompt, config);
 };
 
 // --- JSON Schema Definitions for AI ---
@@ -118,7 +118,7 @@ const VENDOR_RECOMMENDATION_SCHEMA = {
 
 export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
     try {
-        const payload = `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. If a field like title or date cannot be determined, omit it from the JSON response. Request: "${prompt}"`;
+        const fullPrompt = `Analyze the user request and extract reminder details. Infer date relative to today, ${new Date().toDateString()}. Also, identify any recurrence patterns (e.g., 'every day', 'weekly', 'every 2 months'). If recurrence is found, provide frequency ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY') and interval. If a field like title or date cannot be determined, omit it from the JSON response. Request: "${prompt}"`;
         const config = {
             responseMimeType: "application/json",
             responseSchema: {
@@ -140,7 +140,7 @@ export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Remi
                 required: ["type", "description"]
             }
         };
-        const parsed = await generateAndParseJson(payload, config);
+        const parsed = await generateAndParseJson(fullPrompt, config);
 
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
             throw new Error("AI returned an invalid object format for the reminder.");
@@ -205,29 +205,24 @@ Provide a title, a future date, a type, and a brief, helpful description for eac
     };
 
     try {
-        const { data: result, error } = await supabase.functions.invoke('gemini-suggestions', {
-            body: { prompt, config },
-        });
-
-        if (error) {
-            console.error('Edge function invocation error for suggestions:', error);
-            throw new Error('Failed to send a request to the Edge Function');
-        }
-
-        if (result.error) {
-            throw new Error(result.error);
-        }
-
-        if (result && Array.isArray(result.suggestions)) {
+        // Refactored to use the generic JSON parser which calls the 'gemini-proxy' function.
+        // This standardizes all AI calls and removes the problematic direct call to 'gemini-suggestions'.
+        const suggestionsData = await generateAndParseJson(prompt, config);
+        
+        if (suggestionsData && Array.isArray(suggestionsData.suggestions)) {
             return {
-                dailyBriefing: result.dailyBriefing,
-                suggestions: result.suggestions.map((s: any) => ({...s, date: new Date(s.date)}))
+                dailyBriefing: suggestionsData.dailyBriefing,
+                suggestions: suggestionsData.suggestions.map((s: any) => ({...s, date: new Date(s.date)}))
             };
         }
+        
+        // Fallback in case of unexpected format from AI, though generateAndParseJson should throw.
+        console.warn("AI suggestions response was not in the expected format:", suggestionsData);
         return { suggestions: [], dailyBriefing: "Have a great day!" };
     } catch (error) {
         console.error("Error getting dashboard suggestions:", error);
-        throw new Error(`AI Service Error: ${error instanceof Error ? error.message : String(error)}`);
+        // The error is already wrapped by invokeGeminiProxy, so just re-throw it.
+        throw error;
     }
 }
 
@@ -238,7 +233,7 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
     }
 
     try {
-        const payload = `Based on the reminder titled "${reminder.title}" with description "${reminder.description}", follow these steps:
+        const prompt = `Based on the reminder titled "${reminder.title}" with description "${reminder.description}", follow these steps:
 1. Identify 1-2 distinct activities a user might need to perform (e.g., 'Buy a Gift', 'Book a Doctor Appointment').
 2. For each activity, brainstorm a single, generic but searchable product or service query. Example: for 'Buy a Gift' for a birthday, the query could be 'birthday gifts'. For 'Dentist Appointment', it could be 'dental clinics nearby'.
 3. For each activity and its corresponding query, find 2-3 popular Indian vendors that provide this product/service.
@@ -246,7 +241,7 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
         
         const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
 
-        const recommendations = await generateAndParseJson(payload, config);
+        const recommendations = await generateAndParseJson(prompt, config);
         if (!Array.isArray(recommendations) || (recommendations.length > 0 && (typeof recommendations[0] !== 'object' || !('activity' in recommendations[0])))) {
             throw new Error("AI returned an invalid format for service recommendations.");
         }
@@ -260,7 +255,7 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
 
 export const extractFollowUpReminder = async (itemName: string, purchaseDate: Date): Promise<{ title: string; date: Date } | null> => {
     try {
-        const payload = `Analyze the purchased item: "${itemName}". The purchase was made on ${purchaseDate.toDateString()}. 
+        const prompt = `Analyze the purchased item: "${itemName}". The purchase was made on ${purchaseDate.toDateString()}. 
         Determine if this item typically requires a future follow-up action like renewal, repurchase, or maintenance (e.g., insurance, subscriptions, warranties, regular check-ups).
         If a follow-up is highly likely, provide a concise reminder title (e.g., "Renew car insurance") and a calculated future date for the reminder. 
         If no follow-up is needed, indicate that.`;
@@ -278,7 +273,7 @@ export const extractFollowUpReminder = async (itemName: string, purchaseDate: Da
             }
         };
 
-        const result = await generateAndParseJson(payload, config);
+        const result = await generateAndParseJson(prompt, config);
 
         if (result && result.requiresFollowUp && result.followUpTitle && result.followUpDate) {
             const followUpDate = new Date(result.followUpDate);
@@ -294,7 +289,7 @@ export const extractFollowUpReminder = async (itemName: string, purchaseDate: Da
 };
 
 export const getHolidays = async (year: number, country: string, region: string): Promise<{ holidayName: string; date: string }[]> => {
-    const payload = `List all official public holidays for ${country} ${region ? `(specifically for the region/state of ${region})` : ''} in the year ${year}. Provide the holiday name and the exact date in 'YYYY-MM-DD' format.`;
+    const prompt = `List all official public holidays for ${country} ${region ? `(specifically for the region/state of ${region})` : ''} in the year ${year}. Provide the holiday name and the exact date in 'YYYY-MM-DD' format.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -309,7 +304,7 @@ export const getHolidays = async (year: number, country: string, region: string)
             }
         }
     };
-    const holidays = await generateAndParseJson(payload, config);
+    const holidays = await generateAndParseJson(prompt, config);
     if (!Array.isArray(holidays)) {
         throw new Error("AI returned an invalid format for holidays.");
     }
@@ -317,11 +312,11 @@ export const getHolidays = async (year: number, country: string, region: string)
 }
 
 export const searchForServices = async (reminder: Reminder, query: string): Promise<ActivityRecommendation[]> => {
-    const payload = `A user has a reminder titled "${reminder.title}" and is now searching for "${query}". 
+    const prompt = `A user has a reminder titled "${reminder.title}" and is now searching for "${query}". 
     Based on this context, brainstorm one relevant activity and find 2-3 popular Indian vendors for that activity. 
     Provide vendor name, description, price range (INR), rating (out of 5), the specific product query, and customer care contact.`;
     const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
-    const results = await generateAndParseJson(payload, config);
+    const results = await generateAndParseJson(prompt, config);
     if (!Array.isArray(results)) {
         throw new Error("AI returned an invalid format for service search.");
     }
@@ -333,12 +328,12 @@ export const getRecipesForReminder = async (reminder: Reminder): Promise<Recipe[
     if (recipeForReminderCache.has(cacheKey)) {
         return recipeForReminderCache.get(cacheKey)!;
     }
-    const payload = `A user has a reminder for "${reminder.title}" on ${reminder.date.toDateString()}. Suggest 2-3 suitable and creative recipes for this occasion. Provide full details for each recipe.`;
+    const prompt = `A user has a reminder for "${reminder.title}" on ${reminder.date.toDateString()}. Suggest 2-3 suitable and creative recipes for this occasion. Provide full details for each recipe.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(payload, config);
+    const recipes = await generateAndParseJson(prompt, config);
     if (!Array.isArray(recipes)) {
         throw new Error("AI returned an invalid format for reminder recipes.");
     }
@@ -347,12 +342,12 @@ export const getRecipesForReminder = async (reminder: Reminder): Promise<Recipe[
 }
 
 export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[]> => {
-    const payload = `Find 8 diverse recipes that match the query: "${query}". The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe, including a placeholder image URL.`;
+    const prompt = `Find 8 diverse recipes that match the query: "${query}". The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe, including a placeholder image URL.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(payload, config);
+    const recipes = await generateAndParseJson(prompt, config);
     if (!Array.isArray(recipes)) {
         throw new Error("AI returned an invalid format for recipe search.");
     }
@@ -361,7 +356,7 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
 
 export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
     const historyPrompt = history.length > 0 ? `To ensure variety, avoid suggesting these recipes they've seen recently: ${history.slice(-30).join(', ')}.` : '';
-    const payload = `Act as a creative chef for a user in India. Today's date is ${new Date().toDateString()}.
+    const prompt = `Act as a creative chef for a user in India. Today's date is ${new Date().toDateString()}.
 1. Create an inspiring theme for today's meals (e.g., 'Monsoon Munchies', 'Healthy Summer Delights').
 2. Based on this theme, suggest 1-2 recipes for each of these categories: breakfast, lunch, hitea, dinner, all_time_snacks.
 3. The user preference is vegetarian-only: ${isVeg}.
@@ -382,18 +377,18 @@ export const getDailyRecommendations = async (isVeg: boolean, history: string[])
             required: ["theme", "breakfast", "lunch", "hitea", "dinner", "all_time_snacks"]
         }
     };
-    const recommendations = await generateAndParseJson(payload, config);
+    const recommendations = await generateAndParseJson(prompt, config);
     return recommendations as DailyRecommendationResponse;
 }
 
 export const shuffleRecipeCategory = async (category: string, isVeg: boolean, history: string[]): Promise<Recipe[]> => {
     const historyPrompt = history.length > 0 ? `Avoid suggesting these recipes they've seen recently: ${history.slice(-30).join(', ')}.` : '';
-    const payload = `Suggest two new recipes for the '${category}' category for a user in India. The user preference is vegetarian-only: ${isVeg}. ${historyPrompt} Provide full details for each recipe.`;
+    const prompt = `Suggest two new recipes for the '${category}' category for a user in India. The user preference is vegetarian-only: ${isVeg}. ${historyPrompt} Provide full details for each recipe.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(payload, config);
+    const recipes = await generateAndParseJson(prompt, config);
     if (!Array.isArray(recipes)) {
         throw new Error("AI returned an invalid format for recipe shuffle.");
     }
@@ -405,12 +400,12 @@ export const getVendorsForRecipeAction = async (recipe: Recipe, action: string):
     if (vendorActionCache.has(cacheKey)) {
         return vendorActionCache.get(cacheKey)!;
     }
-    const payload = `For the recipe "${recipe.name}", the user wants to '${action}'.
+    const prompt = `For the recipe "${recipe.name}", the user wants to '${action}'.
 1. Brainstorm one activity for this action (e.g., 'Buy Groceries Online', 'Order from Restaurants').
 2. Find 2-3 popular Indian vendors relevant to this activity.
 3. Provide vendor details: name, description, price range (INR), rating (out of 5), a relevant product query, and customer care contact.`;
     const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
-    const recommendations = await generateAndParseJson(payload, config);
+    const recommendations = await generateAndParseJson(prompt, config);
     if (!Array.isArray(recommendations)) {
         throw new Error("AI returned an invalid format for vendor recommendations.");
     }
@@ -420,8 +415,8 @@ export const getVendorsForRecipeAction = async (recipe: Recipe, action: string):
 
 export const getAiKitchenTip = async (): Promise<string> => {
     if (kitchenTipCache) return kitchenTipCache;
-    const payload = "Give me a single, clever, and brief kitchen tip or food fact that would be interesting for a home cook in India.";
-    const tip = await generateText(payload);
+    const prompt = "Give me a single, clever, and brief kitchen tip or food fact that would be interesting for a home cook in India.";
+    const tip = await generateText(prompt);
     kitchenTipCache = tip;
     return tip;
 }
@@ -431,8 +426,34 @@ export const getDrinkPairing = async (recipeName: string, cuisine: string): Prom
     if (drinkPairingCache.has(cacheKey)) {
         return drinkPairingCache.get(cacheKey)!;
     }
-    const payload = `What is a good non-alcoholic drink pairing for "${recipeName}", which is a ${cuisine} dish? Suggest one creative option and briefly explain why it pairs well.`;
-    const pairing = await generateText(payload);
+    const prompt = `What is a good non-alcoholic drink pairing for "${recipeName}", which is a ${cuisine} dish? Suggest one creative option and briefly explain why it pairs well.`;
+    const pairing = await generateText(prompt);
     drinkPairingCache.set(cacheKey, pairing);
     return pairing;
 }
+
+export const getAnalyticsInsights = async (reminders: Reminder[], orders: Order[]): Promise<string> => {
+    const relevantReminders = reminders
+        .filter(r => r.is_completed)
+        .map(({ title, type, date }) => ({ title, type, date }));
+
+    const relevantOrders = orders.map(({ total, date, items }) => ({
+        total,
+        date,
+        itemCount: items.length,
+    }));
+
+    // Limit data sent to the API to avoid overly long prompts
+    const dataSummary = JSON.stringify({ completedReminders: relevantReminders.slice(0, 20), recentOrders: relevantOrders.slice(0, 10) }, null, 2);
+
+    const prompt = `As an expert productivity and finance assistant, analyze the following user data. Provide a concise, actionable summary of their habits based on completed reminders and order history. The analysis should be in markdown format and include:
+1.  A short "Productivity Snapshot" heading.
+2.  A brief "Spending Habits" heading.
+3.  A bulleted list under a "Personalized Tips" heading with 2-3 actionable tips for improvement.
+
+User Data:
+${dataSummary}`;
+    
+    const insights = await generateText(prompt);
+    return insights;
+};

@@ -1,17 +1,22 @@
 
+
+
+
+
 import React, { useState } from 'react';
 import { User, Mail, Phone, MapPin, MessageSquare, Edit, Package, Info, Heart, Utensils, LogOut } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../hooks/useAuthContext';
 import EditReminderModal from '../components/EditReminderModal';
 import { Reminder, AutoReminder, AutoReminderSource, Recipe } from '../types';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
+const { Link, useNavigate } = ReactRouterDOM;
 import RecipeCard from '../components/RecipeCard';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
 
 
-const { Link, useNavigate } = ReactRouterDOM;
 
 
 const ProfileInput = ({ icon, label, value, type = "text" }: { icon: React.ReactNode; label: string; value: string; type?: string }) => (
@@ -86,12 +91,12 @@ const ProfilePage: React.FC = () => {
         setReminderModalState({ isOpen: true, initialData: reminder });
     };
     
-    const handleSaveReminder = (data: Partial<Reminder>) => {
+    const handleSaveReminder = async (data: Partial<Reminder>) => {
         if (data.type && !reminderTypes.some(t => t.toLowerCase() === data.type!.toLowerCase())) {
             addReminderType(data.type);
         }
         if (reminderModalState.initialData.id) {
-            updateReminder(reminderModalState.initialData.id, data);
+            await updateReminder(reminderModalState.initialData.id, data);
         }
         setReminderModalState({ isOpen: false, initialData: {} });
     };
@@ -100,12 +105,12 @@ const ProfilePage: React.FC = () => {
         deleteReminder(id);
     };
 
-    const handleSnooze = (id: string, days: number) => {
+    const handleSnooze = async (id: string, days: number) => {
         const reminder = reminders.find(r => r.id === id);
         if(reminder) {
             const newDate = new Date(reminder.date);
             newDate.setDate(newDate.getDate() + days);
-            updateReminder(id, { date: newDate });
+            await updateReminder(id, { date: newDate });
         }
     };
 
@@ -113,8 +118,8 @@ const ProfilePage: React.FC = () => {
         completeReminder(reminder.id);
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         navigate('/login');
     };
 

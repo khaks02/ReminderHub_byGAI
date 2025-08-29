@@ -1,13 +1,15 @@
 
 
+
 import React, { useState, useRef, useEffect } from 'react';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
-const { HashRouter, NavLink, Route, Routes, useLocation, Navigate } = ReactRouterDOM;
+const { HashRouter, NavLink, Route, Routes, useLocation, Navigate, useNavigate } = ReactRouterDOM;
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 import { AuthProvider, useAuth } from './hooks/useAuthContext';
 
-import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, LogOut } from 'lucide-react';
+import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, LogOut, BarChart2, Calendar } from 'lucide-react';
 import Breadcrumb from './components/Breadcrumb';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -18,8 +20,10 @@ import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import Spinner from './components/Spinner';
 import OnboardingModal from './components/OnboardingModal';
+import CalendarPage from './pages/CalendarPage';
 
 interface NavItemProps {
   to: string;
@@ -66,10 +70,12 @@ const HeaderTitle = () => {
     const titleMapping: { [key: string]: string } = {
         dashboard: "Today's Reminders",
         recipes: "Today's Recipes",
+        calendar: 'Calendar',
         settings: 'Settings',
         cart: 'Shopping Cart',
         orders: 'My Orders',
         profile: 'User Profile',
+        analytics: 'Analytics',
     };
 
     const title = titleMapping[path] || 'ReminderHub AI';
@@ -84,7 +90,8 @@ const AppContent = () => {
   const { logout, currentUser } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const navigate = ReactRouterDOM.useNavigate();
+  // FIX: Use the hook directly from the import.
+  const navigate = useNavigate();
   
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -108,8 +115,8 @@ const AppContent = () => {
     };
   }, []);
 
-  const handleLogout = () => {
-      logout();
+  const handleLogout = async () => {
+      await logout();
       navigate('/login');
   };
 
@@ -144,6 +151,7 @@ const AppContent = () => {
                         <nav className="flex items-center gap-2">
                             <HeaderNavItem to="/">Today's Reminders</HeaderNavItem>
                             <HeaderNavItem to="/recipes">Today's Recipes</HeaderNavItem>
+                            <HeaderNavItem to="/calendar">Calendar</HeaderNavItem>
                             <HeaderNavItem to="/orders">My Orders</HeaderNavItem>
                         </nav>
                     </div>
@@ -177,16 +185,23 @@ const AppContent = () => {
                                 <NavLink 
                                     to="/profile" 
                                     onClick={() => setIsUserMenuOpen(false)}
-                                    className="block px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
-                                    My Profile
+                                    <User size={16}/> My Profile
+                                </NavLink>
+                                 <NavLink 
+                                    to="/analytics" 
+                                    onClick={() => setIsUserMenuOpen(false)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    <BarChart2 size={16}/> Analytics
                                 </NavLink>
                                  <NavLink 
                                     to="/settings" 
                                     onClick={() => setIsUserMenuOpen(false)}
-                                    className="block px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
-                                    Settings
+                                    <Settings size={16}/> Settings
                                 </NavLink>
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
                                 <ThemeToggle inMenu={true} />
@@ -214,10 +229,12 @@ const AppContent = () => {
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/recipes" element={<RecipesPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
@@ -227,7 +244,7 @@ const AppContent = () => {
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)]">
             <BottomNavItem to="/" icon={<Home size={24} />}>Today's Reminders</BottomNavItem>
             <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Today's Recipes</BottomNavItem>
-            <BottomNavItem to="/orders" icon={<ShoppingBag size={24} />}>My Orders</BottomNavItem>
+            <BottomNavItem to="/calendar" icon={<Calendar size={24} />}>Calendar</BottomNavItem>
         </nav>
   );
 };
@@ -251,7 +268,7 @@ const AppRoutes = () => {
                 element={
                     <ProtectedRoute>
                         <AppProvider>
-                           <AppContent />
+                            <AppContent />
                         </AppProvider>
                     </ProtectedRoute>
                 }

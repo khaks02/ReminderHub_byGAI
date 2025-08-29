@@ -2,7 +2,10 @@
 
 
 
+
+
 import React from 'react';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
 import * as ReactRouterDOM from 'react-router-dom';
 const { useLocation, Link } = ReactRouterDOM;
 import { ChevronRight, Home } from 'lucide-react';
@@ -26,10 +29,12 @@ const Breadcrumb: React.FC = () => {
                     
                     const nameMapping: { [key: string]: string } = {
                         recipes: "Today's Recipes",
+                        calendar: "Calendar",
                         settings: "Settings",
                         cart: "Shopping Cart",
                         orders: "My Orders",
-                        profile: "User Profile"
+                        profile: "User Profile",
+                        analytics: "Analytics"
                     };
 
                     const name = nameMapping[value as keyof typeof nameMapping] || value.charAt(0).toUpperCase() + value.slice(1);

@@ -1,9 +1,11 @@
 
-import React from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
-import { useAuth } from '../hooks/useAuthContext';
 
+
+import React from 'react';
+// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
+import * as ReactRouterDOM from 'react-router-dom';
 const { Navigate, useLocation } = ReactRouterDOM;
+import { useAuth } from '../hooks/useAuthContext';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const { currentUser } = useAuth();

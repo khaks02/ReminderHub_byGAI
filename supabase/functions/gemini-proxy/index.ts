@@ -1,66 +1,79 @@
-// The triple-slash directive below provides type definitions for the Deno runtime.
-// It is required for Supabase Edge Functions and must be the first line of the file.
-// FIX: Use a specific version for Supabase functions types to ensure stable resolution.
-/// <reference types="https://esm.sh/@supabase/functions-js@2.4.1" />
+// FIX: Use the un-versioned URL for Supabase function types to ensure Deno types are correctly resolved.
+/// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
-import { GoogleGenAI } from "npm:@google/genai@0.12.0";
+import { GoogleGenAI } from "https://esm.sh/@google/genai@0.12.0";
+
+// Standard CORS headers for Supabase functions.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 Deno.serve(async (req: Request) => {
-  // Dynamically handle CORS by reflecting the request's origin.
-  // This is crucial for supporting custom domains and credentialed requests,
-  // where a wildcard ('*') for Access-Control-Allow-Origin is not permitted.
-  const origin = req.headers.get('Origin') || '*';
-  const corsHeaders = {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
-    'access-control-allow-credentials': 'true',
-  };
-
   // Handle CORS preflight requests.
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204, // No Content
-      headers: corsHeaders 
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     // Ensure the request method is POST.
     if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
-    const { payload, config } = await req.json();
-    const apiKey = Deno.env.get("API_KEY");
 
-    if (!apiKey) {
-      throw new Error("The API_KEY environment variable is not set in Supabase secrets.");
+    // Parse the request body.
+    const body = await req.json();
+    const { prompt, config } = body;
+
+    // Validate the presence and type of the 'prompt'.
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      return new Response(JSON.stringify({ error: "Missing or invalid 'prompt' in request body." }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    // Retrieve the Gemini API key from environment variables (Supabase secrets).
+    const apiKey = Deno.env.get("API_KEY");
+    if (!apiKey) {
+      console.error("API_KEY not set in Supabase secrets.");
+      return new Response(JSON.stringify({ error: 'Server misconfiguration: API key missing.' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
+    // Initialize the Gemini client and call the API.
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: payload,
-      config: config,
+      contents: prompt,
+      config: config, // Pass the entire config object from the client.
     });
 
     const text = response.text;
 
+    // Return the successful response from Gemini.
     return new Response(JSON.stringify({ text }), {
-      headers: { ...corsHeaders, 'content-type': "application/json" },
       status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (error) {
+    // Catch JSON parsing errors and other exceptions.
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    console.error("Edge Function Error:", errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      headers: { ...corsHeaders, 'content-type': "application/json" },
-      status: 500,
+    console.error("Gemini Proxy Function Error:", error);
+
+    const status = (error instanceof SyntaxError) ? 400 : 500;
+    const message = (error instanceof SyntaxError) ? 'Invalid JSON body.' : `Internal Server Error: ${errorMessage}`;
+    
+    return new Response(JSON.stringify({ error: message }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
