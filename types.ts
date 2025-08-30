@@ -1,5 +1,6 @@
 
 
+
 export interface User {
     id: string;
     name: string;
@@ -31,7 +32,7 @@ export interface Reminder {
     date: Date;
     type: ReminderType;
     description: string;
-    recurrenceRule?: RecurrenceRule | null;
+    recurrence_rule?: RecurrenceRule | null;
     is_completed?: boolean;
     source?: AutoReminderSource;
 }

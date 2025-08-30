@@ -2,8 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Function to register the service worker
-const registerServiceWorker = () => {
+// Per user request, the service worker registration has been disabled to
+// bypass the "invalid document state" error for now.
+/*
+window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
     // In certain sandboxed or iframe-based environments, relative paths for service
     // workers can be misinterpreted. To ensure the correct origin, we construct
@@ -11,23 +13,15 @@ const registerServiceWorker = () => {
     const swUrl = `${window.location.origin}/sw.js`;
     navigator.serviceWorker.register(swUrl)
       .then(registration => {
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        console.log('[ServiceWorker] Registration successful. Scope:', registration.scope);
       })
       .catch(error => {
-        console.log('ServiceWorker registration failed: ', error);
+        // Made the error log more descriptive to help pinpoint the cause.
+        console.error('[ServiceWorker] Registration failed. The document might not be in a valid state or a secure context. Error:', error);
       });
   }
-};
-
-// The 'load' event might have already fired.
-// We check the document.readyState. If it's 'complete', we can register immediately.
-// Otherwise, we wait for the 'load' event.
-if (document.readyState === 'complete') {
-  registerServiceWorker();
-} else {
-  window.addEventListener('load', registerServiceWorker);
-}
-
+});
+*/
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -36,6 +36,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
             const recommendedServices = await getServiceRecommendations(reminder);
             setRecommendations(recommendedServices);
         } catch (err) {
+            console.error('[ReminderCard] Failed to fetch AI service recommendations:', err);
             setError('Could not fetch AI recommendations.');
         } finally {
             setIsLoading(false);
@@ -51,6 +52,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
             const searchResults = await searchForServices(reminder, searchQuery);
             setRecommendations(prev => [...searchResults, ...prev]);
         } catch (err) {
+            console.error('[ReminderCard] AI service search failed:', err);
             setError('Search failed. Please try again.');
         } finally {
             setIsSearching(false);
@@ -66,6 +68,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
             const recipes = await getRecipesForReminder(reminder);
             setRecipeIdeas(recipes);
         } catch (err) {
+            console.error('[ReminderCard] Failed to fetch AI recipe ideas:', err);
             setRecipeError('Could not fetch AI recipe ideas.');
         } finally {
             setIsRecipeLoading(false);
@@ -99,7 +102,7 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                     url: window.location.origin,
                 });
             } catch (err) {
-                console.error("Share failed:", err);
+                console.error("[ReminderCard] Web Share API failed:", err);
                 onShowToast("Could not share reminder.", 'error');
             }
         } else {
@@ -107,13 +110,13 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                 await navigator.clipboard.writeText(shareText);
                 onShowToast("Invitation copied to clipboard!", 'success');
             } catch (err) {
-                console.error("Copy failed:", err);
+                console.error("[ReminderCard] Clipboard copy failed:", err);
                 onShowToast("Could not copy invitation.", 'error');
             }
         }
     };
 
-    const formatRecurrence = (rule: Reminder['recurrenceRule']) => {
+    const formatRecurrence = (rule: Reminder['recurrence_rule']) => {
         if (!rule) return '';
         const { frequency, interval } = rule;
         const freqStr = frequency.toLowerCase().replace(/ly$/, '');
@@ -189,9 +192,9 @@ const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onVendorSelect, o
                 <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mt-4 gap-4">
                     <div className="flex items-center"><Clock size={16} className="mr-2"/>
                     <span>{formatDate(reminder.date)}</span></div>
-                    {reminder.recurrenceRule && (
+                    {reminder.recurrence_rule && (
                         <div className="flex items-center"><Repeat size={16} className="mr-2 text-blue-500"/>
-                        <span>{formatRecurrence(reminder.recurrenceRule)}</span></div>
+                        <span>{formatRecurrence(reminder.recurrence_rule)}</span></div>
                     )}
                 </div>
                  <button onClick={handleToggleExpansion} className="w-full flex justify-center p-2 mt-4 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">

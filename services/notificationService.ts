@@ -9,7 +9,7 @@ const getServiceWorkerRegistration = async (): Promise<ServiceWorkerRegistration
             // .ready waits for the service worker to become active.
             return await navigator.serviceWorker.ready;
         } catch (error) {
-            console.error('Service Worker not ready:', error);
+            console.error('[NotificationService] Service Worker not ready:', error);
             return null;
         }
     }
@@ -22,18 +22,18 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
         // Request permission from the user to show notifications.
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
-            console.warn('Notification permission was not granted.');
+            console.warn('[NotificationService] Notification permission was not granted.');
         }
         return permission === 'granted';
     }
-    console.warn('This browser does not support desktop notification.');
+    console.warn('[NotificationService] This browser does not support desktop notification.');
     return false;
 };
 
 const showNotification = async (reminder: Reminder, body: string) => {
     const registration = await getServiceWorkerRegistration();
     if (!registration) {
-        console.error("No active Service Worker registration found to show notification.");
+        console.error("[NotificationService] No active Service Worker registration found to show notification.");
         return;
     }
 

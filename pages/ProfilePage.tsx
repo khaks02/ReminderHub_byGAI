@@ -1,17 +1,11 @@
-
-
-
-
-
 import React, { useState } from 'react';
 import { User, Mail, Phone, MapPin, MessageSquare, Edit, Package, Info, Heart, Utensils, LogOut } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../hooks/useAuthContext';
 import EditReminderModal from '../components/EditReminderModal';
 import { Reminder, AutoReminder, AutoReminderSource, Recipe } from '../types';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { Link, useNavigate } = ReactRouterDOM;
+// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
+import { Link, useNavigate } from 'react-router-dom';
 import RecipeCard from '../components/RecipeCard';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
@@ -75,7 +69,6 @@ const ProfilePage: React.FC = () => {
     };
 
     const handleSelectRecipe = (recipe: Recipe) => {
-        console.log("Selected recipe:", recipe.name);
         navigate('/recipes');
     };
 
@@ -124,7 +117,7 @@ const ProfilePage: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto max-w-6xl">
+        <div className="container mx-auto max-w-6xl p-4 md:p-8 pb-24 md:pb-8">
              {reminderModalState.isOpen && (
                 <EditReminderModal
                     isOpen={reminderModalState.isOpen}

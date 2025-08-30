@@ -1,10 +1,6 @@
-
-
-
 import React, { useState, useRef, useEffect } from 'react';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { HashRouter, NavLink, Route, Routes, useLocation, Navigate, useNavigate } = ReactRouterDOM;
+// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
+import { HashRouter, NavLink, Route, Routes, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 import { AuthProvider, useAuth } from './hooks/useAuthContext';
@@ -23,7 +19,6 @@ import LoginPage from './pages/LoginPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import Spinner from './components/Spinner';
 import OnboardingModal from './components/OnboardingModal';
-import CalendarPage from './pages/CalendarPage';
 
 interface NavItemProps {
   to: string;
@@ -68,9 +63,8 @@ const HeaderTitle = () => {
     const path = location.pathname.split('/')[1] || 'dashboard';
     
     const titleMapping: { [key: string]: string } = {
-        dashboard: "Today's Reminders",
+        dashboard: "Dashboard",
         recipes: "Today's Recipes",
-        calendar: 'Calendar',
         settings: 'Settings',
         cart: 'Shopping Cart',
         orders: 'My Orders',
@@ -140,6 +134,7 @@ const AppContent = () => {
 
 
   return (
+    <>
         <div className="flex flex-col flex-1 h-screen">
             <OnboardingModal isOpen={showOnboarding} onFinish={handleFinishOnboarding} />
             {/* Header */}
@@ -149,9 +144,8 @@ const AppContent = () => {
                     <div className="hidden md:flex items-center gap-6">
                         <h1 className="text-2xl font-bold text-primary">ReminderHub</h1>
                         <nav className="flex items-center gap-2">
-                            <HeaderNavItem to="/">Today's Reminders</HeaderNavItem>
+                            <HeaderNavItem to="/">Dashboard</HeaderNavItem>
                             <HeaderNavItem to="/recipes">Today's Recipes</HeaderNavItem>
-                            <HeaderNavItem to="/calendar">Calendar</HeaderNavItem>
                             <HeaderNavItem to="/orders">My Orders</HeaderNavItem>
                         </nav>
                     </div>
@@ -220,16 +214,15 @@ const AppContent = () => {
             </header>
             
             {/* Breadcrumb Bar */}
-            <div className="hidden md:block sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
+            <div className="md:block sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
               <Breadcrumb />
             </div>
             
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+            <main className="flex-1 overflow-y-auto">
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/recipes" element={<RecipesPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
@@ -242,10 +235,10 @@ const AppContent = () => {
         
         {/* Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)]">
-            <BottomNavItem to="/" icon={<Home size={24} />}>Today's Reminders</BottomNavItem>
-            <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Today's Recipes</BottomNavItem>
-            <BottomNavItem to="/calendar" icon={<Calendar size={24} />}>Calendar</BottomNavItem>
+            <BottomNavItem to="/" icon={<Home size={24} />}>Dashboard</BottomNavItem>
+            <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Recipes</BottomNavItem>
         </nav>
+      </>
   );
 };
 

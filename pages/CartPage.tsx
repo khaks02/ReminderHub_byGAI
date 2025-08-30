@@ -1,13 +1,9 @@
-
-
-
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, ConciergeBell } from 'lucide-react';
 import { CartItem, CartItemType, ServiceCartItem, PreparedDishCartItem, VendorProductCartItem } from '../types';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { NavLink } = ReactRouterDOM;
+// FIX: Switched from a namespace import to a direct named import to resolve module resolution errors.
+import { NavLink } from 'react-router-dom';
 
 const VendorSelector: React.FC<{ vendors: string[]; selectedVendor?: string; onSelect: (vendor: string) => void; }> = ({ vendors, selectedVendor, onSelect }) => {
     if (!vendors || vendors.length === 0) return <p className="text-xs text-gray-500 mt-1">No vendors available.</p>;
@@ -158,7 +154,7 @@ const CartPage: React.FC = () => {
     }
 
     return (
-        <div className="container mx-auto max-w-4xl">
+        <div className="container mx-auto max-w-4xl p-4 md:p-8 pb-24 md:pb-8">
             <h1 className="text-3xl font-bold mb-2">Your Service Cart</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Review and checkout the services you've selected.</p>
             

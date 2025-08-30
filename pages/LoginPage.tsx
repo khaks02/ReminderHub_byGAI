@@ -1,12 +1,6 @@
-
-
-
-
-
 import React, { useState } from 'react';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { useNavigate, useLocation } = ReactRouterDOM;
+// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import Spinner from '../components/Spinner';
@@ -58,6 +52,7 @@ const LoginPage: React.FC = () => {
                 navigate(from, { replace: true });
             }
         } catch (err) {
+            console.error('[LoginPage] Authentication error:', err);
             setError(err instanceof Error ? err.message : "An unknown authentication error occurred.");
         }
     };
@@ -68,6 +63,7 @@ const LoginPage: React.FC = () => {
             await login(method);
             navigate(from, { replace: true });
         } catch (err) {
+             console.error('[LoginPage] Authentication error:', err);
              setError(err instanceof Error ? err.message : "An unknown login error occurred.");
         }
     };

@@ -1,10 +1,6 @@
-
-
-
 import React from 'react';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { Navigate, useLocation } = ReactRouterDOM;
+// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

@@ -48,7 +48,7 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
     
     useEffect(() => {
         setFormData(initialData);
-        if (initialData.recurrenceRule && (initialData.recurrenceRule.interval > 1 || !['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(initialData.recurrenceRule.frequency))) {
+        if (initialData.recurrence_rule && (initialData.recurrence_rule.interval > 1 || !['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(initialData.recurrence_rule.frequency))) {
             setShowCustomRecurrence(true);
         } else {
             setShowCustomRecurrence(false);
@@ -77,12 +77,12 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
     };
 
     const handleRecurrenceChange = (rule: RecurrenceRule | null) => {
-        setFormData(prev => ({ ...prev, recurrenceRule: rule }));
+        setFormData(prev => ({ ...prev, recurrence_rule: rule }));
     };
 
     const handleCustomRecurrenceChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        const currentRule = formData.recurrenceRule || { frequency: 'WEEKLY', interval: 1 };
+        const currentRule = formData.recurrence_rule || { frequency: 'WEEKLY', interval: 1 };
         handleRecurrenceChange({
             ...currentRule,
             [name]: name === 'interval' ? Math.max(1, parseInt(value, 10) || 1) : value,
@@ -124,10 +124,10 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
     };
     
     const activeRecurrence = useMemo(() => {
-        if (!formData.recurrenceRule) return 'none';
-        if (showCustomRecurrence || formData.recurrenceRule.interval > 1) return 'custom';
-        return formData.recurrenceRule.frequency.toLowerCase();
-    }, [formData.recurrenceRule, showCustomRecurrence]);
+        if (!formData.recurrence_rule) return 'none';
+        if (showCustomRecurrence || formData.recurrence_rule.interval > 1) return 'custom';
+        return formData.recurrence_rule.frequency.toLowerCase();
+    }, [formData.recurrence_rule, showCustomRecurrence]);
 
 
     return (
@@ -190,12 +190,12 @@ const EditReminderModal: React.FC<ReminderFormModalProps> = ({ isOpen, mode, ini
                             <input 
                                 type="number"
                                 name="interval"
-                                value={formData.recurrenceRule?.interval || 1}
+                                value={formData.recurrence_rule?.interval || 1}
                                 onChange={handleCustomRecurrenceChange}
                                 className={`${inputStyle} w-20 text-center py-2`}
                                 min="1"
                             />
-                            <select name="frequency" value={formData.recurrenceRule?.frequency || 'WEEKLY'} onChange={handleCustomRecurrenceChange} className={`${inputStyle} py-2`}>
+                            <select name="frequency" value={formData.recurrence_rule?.frequency || 'WEEKLY'} onChange={handleCustomRecurrenceChange} className={`${inputStyle} py-2`}>
                                 <option value="DAILY">Day(s)</option>
                                 <option value="WEEKLY">Week(s)</option>
                                 <option value="MONTHLY">Month(s)</option>

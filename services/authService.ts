@@ -1,8 +1,8 @@
-
-
 import { User } from '../types';
 import { supabase } from './supabaseClient';
-import type { User as SupabaseUser, Provider, AuthResponse, Subscription } from '@supabase/supabase-js';
+// FIX: Auth-related types are imported from `@supabase/gotrue-js` to resolve export errors.
+// The `AuthSubscription` type is aliased as `Subscription` for consistency.
+import type { User as SupabaseUser, Provider, AuthResponse, AuthSubscription as Subscription } from '@supabase/gotrue-js';
 
 
 // Helper to map the Supabase user object to our application's User type.
@@ -73,11 +73,25 @@ export const login = async (
     }
 
     if (method === 'google' || method === 'facebook') {
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabase.auth.signInWithOAuth({
             provider: method as Provider,
+            options: {
+                skipBrowserRedirect: true,
+            }
         });
-        if (error) throw new Error(error.message);
-        // OAuth flow redirects, so we don't return a user here.
+
+        if (error) {
+            throw new Error(error.message);
+        }
+        
+        if (data.url) {
+            // Open the URL in a new tab to avoid iframe restrictions.
+            window.open(data.url, '_blank', 'noopener,noreferrer');
+        } else {
+             throw new Error('OAuth login failed: No URL returned from Supabase.');
+        }
+
+        // OAuth flow redirects in a new tab, so we don't return a user here.
         // The onAuthStateChange listener will pick up the session upon redirect.
         return;
     }
@@ -89,7 +103,7 @@ export const login = async (
 export const logout = async (): Promise<void> => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-        console.error("Logout failed", error);
+        console.error("[AuthService] Logout failed:", error);
         throw error;
     }
 };
@@ -105,22 +119,32 @@ export const getCurrentUser = async (): Promise<User | null> => {
 
 // Handles linking an OAuth provider to the current user.
 export const linkAccount = async (provider: 'google'): Promise<void> => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
             // Request readonly access to the user's calendar events
             scopes: 'https_://www.googleapis.com/auth/calendar.events.readonly',
+            skipBrowserRedirect: true,
         },
     });
-    if (error) throw new Error(error.message);
-    // OAuth flow redirects. The onAuthStateChange listener will handle the updated session.
+    if (error) {
+        throw new Error(error.message);
+    }
+    
+    if (data.url) {
+        // Open the URL in a new tab to avoid iframe restrictions.
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+    } else {
+        throw new Error('OAuth account linking failed: No URL returned from Supabase.');
+    }
+    // OAuth flow redirects in new tab. The onAuthStateChange listener will handle the updated session.
 };
 
 // Placeholder for unlinking an OAuth provider.
 export const unlinkAccount = async (provider: 'google'): Promise<void> => {
     // Unlinking a provider securely requires an Edge Function with admin privileges
     // to call `supabase.auth.admin.unlinkIdentity`. This is a placeholder to show the flow.
-    console.warn(`Unlinking ${provider} is not implemented on the client-side for security reasons.`);
+    console.warn(`[AuthService] Unlinking ${provider} is not implemented on the client-side for security reasons.`);
     alert('Disconnecting accounts is a feature coming soon!');
     return Promise.resolve();
 };
@@ -139,7 +163,7 @@ export const uploadAvatar = async (file: File, userId: string): Promise<string> 
         .upload(filePath, file);
 
     if (uploadError) {
-        console.error('Avatar upload error:', uploadError);
+        console.error('[AuthService] Supabase avatar upload error:', uploadError);
         throw new Error('Failed to upload avatar.');
     }
 
@@ -158,7 +182,7 @@ export const uploadAvatar = async (file: File, userId: string): Promise<string> 
     });
     
     if (updateUserError) {
-        console.error('Error updating user metadata:', updateUserError);
+        console.error('[AuthService] Supabase error updating user metadata with avatar URL:', updateUserError);
         throw new Error('Failed to update user profile with new avatar.');
     }
 

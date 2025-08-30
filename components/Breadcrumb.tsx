@@ -1,13 +1,6 @@
-
-
-
-
-
-
 import React from 'react';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { useLocation, Link } = ReactRouterDOM;
+// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
+import { useLocation, Link } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
 const Breadcrumb: React.FC = () => {
@@ -20,7 +13,7 @@ const Breadcrumb: React.FC = () => {
                 <li className="inline-flex items-center">
                     <Link to="/" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
                         <Home className="w-4 h-4 mr-2" />
-                        Today's Reminders
+                        Dashboard
                     </Link>
                 </li>
                 {pathnames.map((value, index) => {
@@ -28,8 +21,8 @@ const Breadcrumb: React.FC = () => {
                     const isLast = index === pathnames.length - 1;
                     
                     const nameMapping: { [key: string]: string } = {
-                        recipes: "Today's Recipes",
                         calendar: "Calendar",
+                        recipes: "Today's Recipes",
                         settings: "Settings",
                         cart: "Shopping Cart",
                         orders: "My Orders",

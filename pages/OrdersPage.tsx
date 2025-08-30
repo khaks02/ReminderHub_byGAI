@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link, Headset, CalendarPlus } from 'lucide-react';
@@ -43,7 +41,7 @@ const OrdersPage: React.FC = () => {
     }
 
     return (
-        <div className="container mx-auto max-w-4xl">
+        <div className="container mx-auto max-w-4xl p-4 md:p-8 pb-24 md:pb-8">
             <h1 className="text-3xl font-bold mb-2">My Orders</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Here is a history of all your purchases.</p>
             

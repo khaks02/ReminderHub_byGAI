@@ -4,3 +4,10 @@
 
 export const SUPABASE_URL = 'https://slzekgelvrigylhbdrvb.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsemVrZ2VsdnJpZ3lsaGJkcnZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyNDEwNDQsImV4cCI6MjA3MTgxNzA0NH0.pacfIlDCNE2Sc2SsI-cIWNO3kv_npixNSRjENHwLP0Q';
+
+/**
+ * --- MOCK DATA ---
+ * Set this to true to use the local mock data generator instead of live APIs.
+ * This will populate the app with thousands of reminders and recipes for demonstration.
+ */
+export const USE_MOCK_DATA = true;

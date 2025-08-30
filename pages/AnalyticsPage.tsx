@@ -1,8 +1,3 @@
-
-
-
-
-
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useAppContext } from '../hooks/useAppContext';
@@ -67,6 +62,7 @@ const AnalyticsPage: React.FC = () => {
             const result = await getAnalyticsInsights(reminders, orders);
             setInsights(result);
         } catch (err) {
+            console.error('[AnalyticsPage] Failed to generate AI insights:', err);
             setInsightsError(err instanceof Error ? err.message : 'Failed to get AI insights. Please try again later.');
         } finally {
             setIsInsightsLoading(false);
@@ -120,7 +116,7 @@ const AnalyticsPage: React.FC = () => {
     }, [orders]);
 
     return (
-        <div className="container mx-auto">
+        <div className="container mx-auto p-4 md:p-8 pb-24 md:pb-8">
             <h1 className="text-3xl font-bold mb-2">Analytics</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Insights into your reminders and service usage.</p>
             

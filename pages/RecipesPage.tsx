@@ -1,12 +1,10 @@
-
-
-import React, { useState, useCallback, useEffect } from 'react';
-import { getRecipes, getDailyRecommendations, shuffleRecipeCategory, getVendorsForRecipeAction, getAiKitchenTip, getDrinkPairing } from '../services/geminiService';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { getRecipes, getDailyRecommendations, shuffleRecipeCategory, getVendorsForRecipeAction, getAiKitchenTip, getDrinkPairing, getRecipesByIngredients } from '../services/geminiService';
 import { DailyRecommendationResponse, Recipe, ActivityRecommendation, VendorSuggestion, CartItemType, PreparedDishCartItem, IngredientsCartItem, ChefServiceCartItem } from '../types';
 import RecipeCard from '../components/RecipeCard';
 import Spinner from '../components/Spinner';
 import Modal from '../components/Modal';
-import { Search, Star, Clock, Users, ChefHat, ShoppingBasket, BookOpen, Sandwich, Shuffle, Heart, Lightbulb, Wine, BarChart3, Thermometer, ExternalLink, X, Utensils } from 'lucide-react';
+import { Search, Star, Clock, Users, ChefHat, ShoppingBasket, BookOpen, Sandwich, Shuffle, Heart, Lightbulb, Wine, BarChart3, Thermometer, ExternalLink, X, Utensils, Sparkles } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
 import Toast from '../components/Toast';
 import VendorModal from '../components/VendorModal';
@@ -41,6 +39,10 @@ const TabButton = ({ label, isActive, onClick }: { label: string, isActive: bool
 const RecipesPage: React.FC = () => {
     const { addToCart, saveRecipe, unsaveRecipe, savedRecipes, preferences, updatePreferences } = useAppContext();
     const [query, setQuery] = useState('');
+    const [ingredientsQuery, setIngredientsQuery] = useState('');
+    const [ingredientRecipes, setIngredientRecipes] = useState<Recipe[] | null>(null);
+    const [isGeneratingByIngredients, setIsGeneratingByIngredients] = useState(false);
+    
     const isVeg = preferences?.recipe_vegetarian_only ?? false;
     const [dailyRecommendations, setDailyRecommendations] = useState<Omit<DailyRecommendationResponse, 'theme'>>({
         breakfast: [], lunch: [], hitea: [], dinner: [], all_time_snacks: [],
@@ -62,16 +64,44 @@ const RecipesPage: React.FC = () => {
 
     const [drinkPairing, setDrinkPairing] = useState<{ loading: boolean, text: string }>({ loading: false, text: '' });
     const [vendorModal, setVendorModal] = useState<{ isOpen: boolean; vendorSuggestion: VendorSuggestion | null; }>({ isOpen: false, vendorSuggestion: null });
+    
+    // State for sticky header visibility
+    const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+    const lastScrollTop = useRef(0);
+
+    useEffect(() => {
+        // This effect handles the visibility of the sticky search header on scroll
+        const mainContent = document.querySelector('main');
+        if (!mainContent) return;
+
+        const handleScroll = () => {
+            const scrollTop = mainContent.scrollTop;
+            // Hide header when scrolling down, show when scrolling up
+            if (scrollTop > lastScrollTop.current && scrollTop > 200) { // 200px threshold
+                setIsHeaderVisible(false);
+            } else if (scrollTop < lastScrollTop.current) {
+                setIsHeaderVisible(true);
+            }
+            lastScrollTop.current = scrollTop <= 0 ? 0 : scrollTop;
+        };
+
+        mainContent.addEventListener('scroll', handleScroll, { passive: true });
+        return () => {
+            mainContent.removeEventListener('scroll', handleScroll);
+        };
+    }, []);
 
 
     const fetchDailyRecipes = useCallback(async (vegetarian: boolean) => {
         setLoadingState(prev => ({ ...prev, global: true }));
         setError(null);
         setSearchResults(null);
+        setIngredientRecipes(null);
         setQuery('');
+        setIngredientsQuery('');
 
         try {
-            getAiKitchenTip().then(setKitchenTip).catch(console.error);
+            getAiKitchenTip().then(setKitchenTip).catch(err => console.error('[RecipesPage] Failed to fetch AI kitchen tip:', err));
 
             const history = JSON.parse(localStorage.getItem(RECIPE_HISTORY_KEY) || '[]');
             const results = await getDailyRecommendations(vegetarian, history);
@@ -103,6 +133,7 @@ const RecipesPage: React.FC = () => {
         setLoadingState({ global: true });
         setError(null);
         setSearchResults(null);
+        setIngredientRecipes(null);
         try {
             const results = await getRecipes(query, isVeg);
             setSearchResults(results);
@@ -110,6 +141,23 @@ const RecipesPage: React.FC = () => {
             setError(err instanceof Error ? err.message : 'Failed to fetch search results. Please try again.');
         } finally {
             setLoadingState({ global: false });
+        }
+    };
+
+    const handleGenerateByIngredients = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!ingredientsQuery.trim()) return;
+        setIsGeneratingByIngredients(true);
+        setError(null);
+        setIngredientRecipes(null);
+        setSearchResults(null);
+        try {
+            const results = await getRecipesByIngredients(ingredientsQuery, isVeg);
+            setIngredientRecipes(results);
+        } catch(err) {
+            setError(err instanceof Error ? err.message : 'Failed to generate recipes from ingredients. Please try again.');
+        } finally {
+            setIsGeneratingByIngredients(false);
         }
     };
     
@@ -218,7 +266,7 @@ const RecipesPage: React.FC = () => {
    };
 
     return (
-        <div className="container mx-auto">
+        <>
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
              {vendorModal.isOpen && (
                 <VendorModal
@@ -229,86 +277,90 @@ const RecipesPage: React.FC = () => {
                 />
             )}
 
-            <h1 className="text-3xl font-bold mb-2">What to Eat Today?</h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">AI-powered daily recommendations and world cuisine search.</p>
+            <div className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-10 border-b border-gray-200 dark:border-slate-700 transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+                <div className="container mx-auto p-4">
+                    <div className="flex flex-col gap-4">
+                        <form onSubmit={handleGenerateByIngredients} className="space-y-2">
+                            <label htmlFor="ingredients-input" className="flex items-center gap-2 font-semibold">
+                                <Sparkles className="text-primary"/>
+                                Generate from Ingredients
+                            </label>
+                            <div className="flex flex-col md:flex-row items-center gap-2">
+                                <textarea
+                                    id="ingredients-input"
+                                    value={ingredientsQuery}
+                                    onChange={(e) => setIngredientsQuery(e.target.value)}
+                                    placeholder="e.g., chicken, tomatoes, onion, garlic..."
+                                    className="w-full h-16 md:h-auto md:flex-grow p-2 border border-gray-300 dark:border-slate-700 rounded-md dark:bg-slate-900"
+                                />
+                                <button type="submit" className="w-full md:w-auto bg-primary text-white font-bold py-2 px-6 rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center gap-2" disabled={isGeneratingByIngredients || !ingredientsQuery}>
+                                    {isGeneratingByIngredients ? <Spinner size="5"/> : 'Generate'}
+                                </button>
+                            </div>
+                        </form>
 
-            <form onSubmit={handleSearch} className="mb-8 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex flex-col md:flex-row items-center gap-4 sticky top-16 z-10">
-                <div className="relative flex-grow w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search for any dish, e.g., 'sushi', 'pasta', 'chicken curry'"
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:ring-primary focus:border-primary dark:bg-slate-900"
-                    />
-                </div>
-                <div className="flex items-center gap-4">
-                    <label className="flex items-center cursor-pointer">
-                        <input type="checkbox" checked={isVeg} onChange={() => updatePreferences({ recipe_vegetarian_only: !isVeg })} className="sr-only peer" />
-                        <div className="relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                        <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Veg Only</span>
-                    </label>
-                    <button type="submit" className="w-full md:w-auto bg-primary text-white font-bold py-2 px-6 rounded-md hover:bg-primary-dark transition-colors" disabled={loadingState.global || !query}>
-                        Search
-                    </button>
-                </div>
-            </form>
+                        <div className="relative flex items-center">
+                            <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
+                            <span className="flex-shrink mx-4 text-xs font-semibold text-gray-400">OR</span>
+                            <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
+                        </div>
 
-            {kitchenTip && !loadingState.global && !searchResults && (
-                <div className="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/40 rounded-lg shadow-sm border border-yellow-200 dark:border-yellow-800/60 flex items-start gap-4">
-                    <Lightbulb className="text-yellow-500 w-6 h-6 flex-shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-bold text-yellow-800 dark:text-yellow-200">AI Pro Kitchen Tip</h3>
-                        <p className="text-sm text-yellow-700 dark:text-yellow-300">{kitchenTip}</p>
+                        <form onSubmit={handleSearch} className="flex flex-col md:flex-row items-center gap-2">
+                            <div className="relative flex-grow w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                                <input
+                                    type="text"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    placeholder="Search for any dish, e.g., 'sushi', 'pasta'"
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:ring-primary focus:border-primary dark:bg-slate-900"
+                                />
+                            </div>
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <label className="flex items-center cursor-pointer flex-grow justify-center">
+                                    <input type="checkbox" checked={isVeg} onChange={() => updatePreferences({ recipe_vegetarian_only: !isVeg })} className="sr-only peer" />
+                                    <div className="relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                    <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Veg Only</span>
+                                </label>
+                                <button type="submit" className="w-full md:w-auto bg-slate-700 dark:bg-slate-600 text-white font-bold py-2 px-6 rounded-md hover:bg-slate-800 dark:hover:bg-slate-500 transition-colors" disabled={loadingState.global || !query}>
+                                    Search
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-            )}
+            </div>
 
-            {loadingState.global && (
-                <div className="flex justify-center items-center h-64">
-                    <Spinner size="12" />
-                    <p className="ml-4 text-lg">AI is preparing your culinary journey...</p>
-                </div>
-            )}
-            {error && <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{error}</p>}
-            
-            {!loadingState.global && !error && (
-                <>
-                    {searchResults ? (
+            <div className="container mx-auto p-4 md:p-8 pb-24 md:pb-8">
+                <h1 className="text-3xl font-bold mb-2">What to Eat Today?</h1>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">AI-powered daily recommendations and world cuisine search.</p>
+
+                {kitchenTip && !loadingState.global && !searchResults && !ingredientRecipes &&(
+                    <div className="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/40 rounded-lg shadow-sm border border-yellow-200 dark:border-yellow-800/60 flex items-start gap-4">
+                        <Lightbulb className="text-yellow-500 w-6 h-6 flex-shrink-0 mt-1" />
                         <div>
-                            <h2 className="text-2xl font-bold mb-4">Search Results for "{query}"</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                {searchResults.map(recipe => (
-                                    <RecipeCard 
-                                        key={recipe.id} 
-                                        recipe={recipe} 
-                                        onSelect={handleSelectRecipe}
-                                        onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
-                                        onToggleSave={handleToggleSave}
-                                        isSaved={savedRecipes.some(r => r.id === recipe.id)}
-                                    />
-                                ))}
-                            </div>
+                            <h3 className="font-bold text-yellow-800 dark:text-yellow-200">AI Pro Kitchen Tip</h3>
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300">{kitchenTip}</p>
                         </div>
-                    ) : (
-                        <div className="space-y-10">
-                           {dailyTheme && <h2 className="text-2xl font-bold text-center italic text-primary dark:text-primary-light">Today's Theme: {dailyTheme}</h2>}
-                           {MEAL_CATEGORIES_ORDER.map(category => {
-                                const recipes = dailyRecommendations[category as keyof typeof dailyRecommendations];
-                                if (!recipes || recipes.length === 0) return null;
-                                
-                                return (
-                                <div key={category}>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-2xl font-bold">{categoryTitles[category]}</h2>
-                                        <button onClick={() => handleShuffle(category)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" disabled={loadingState[category]}>
-                                            {loadingState[category] ? <Spinner size="4" /> : <Shuffle size={16}/>}
-                                            <span>Shuffle</span>
-                                        </button>
-                                    </div>
+                    </div>
+                )}
+
+                {(loadingState.global || isGeneratingByIngredients) && (
+                    <div className="flex justify-center items-center h-64">
+                        <Spinner size="12" />
+                        <p className="ml-4 text-lg">AI is preparing your culinary journey...</p>
+                    </div>
+                )}
+                {error && <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{error}</p>}
+                
+                {!loadingState.global && !isGeneratingByIngredients && !error && (
+                    <>
+                        {searchResults ? (
+                            <div>
+                                <h2 className="text-2xl font-bold mb-4">Search Results for "{query}"</h2>
+                                 {searchResults.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                        {recipes.map(recipe => (
+                                        {searchResults.map(recipe => (
                                             <RecipeCard 
                                                 key={recipe.id} 
                                                 recipe={recipe} 
@@ -319,12 +371,74 @@ const RecipesPage: React.FC = () => {
                                             />
                                         ))}
                                     </div>
-                                </div>
-                           )})}
-                        </div>
-                    )}
-                </>
-            )}
+                                ) : (
+                                    <div className="text-center py-10 px-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-lg">
+                                        <Search size={40} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">No Results Found</h3>
+                                        <p className="text-gray-500 dark:text-gray-400 mt-2">Sorry, we couldn't find any recipes matching your search. Please try a different query.</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : ingredientRecipes ? (
+                            <div>
+                                <h2 className="text-2xl font-bold mb-4">Recipes from your ingredients</h2>
+                                {ingredientRecipes.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                        {ingredientRecipes.map(recipe => (
+                                            <RecipeCard 
+                                                key={recipe.id} 
+                                                recipe={recipe} 
+                                                onSelect={handleSelectRecipe}
+                                                onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
+                                                onToggleSave={handleToggleSave}
+                                                isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-10 px-6 border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-lg">
+                                        <Utensils size={40} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">No Recipes Found</h3>
+                                        <p className="text-gray-500 dark:text-gray-400 mt-2">We couldn't find any recipes with those ingredients. Try some other common ingredients like 'tomato' or 'onion'.</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-10">
+                            {dailyTheme && <h2 className="text-2xl font-bold text-center italic text-primary dark:text-primary-light">Today's Theme: {dailyTheme}</h2>}
+                            {MEAL_CATEGORIES_ORDER.map(category => {
+                                    const recipes = dailyRecommendations[category as keyof typeof dailyRecommendations];
+                                    if (!recipes || recipes.length === 0) return null;
+                                    
+                                    return (
+                                    <div key={category}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-2xl font-bold">{categoryTitles[category]}</h2>
+                                            <button onClick={() => handleShuffle(category)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" disabled={loadingState[category]}>
+                                                {loadingState[category] ? <Spinner size="4" /> : <Shuffle size={16}/>}
+                                                <span>Shuffle</span>
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                            {recipes.map(recipe => (
+                                                <RecipeCard 
+                                                    key={recipe.id} 
+                                                    recipe={recipe} 
+                                                    onSelect={handleSelectRecipe}
+                                                    onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
+                                                    onToggleSave={handleToggleSave}
+                                                    isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                            )})}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
 
             {selectedRecipe && (
                 <Modal isOpen={!!selectedRecipe} onClose={handleCloseModal} title={selectedRecipe.name} maxWidth="4xl">
@@ -437,7 +551,7 @@ const RecipesPage: React.FC = () => {
                    </div>
                 </Modal>
             )}
-        </div>
+        </>
     );
 };
 

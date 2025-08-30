@@ -15,7 +15,9 @@
     "react-router-dom": "6.25.1",
     "lucide-react": "0.536.0",
     "recharts": "2.12.7",
-    "@supabase/supabase-js": "2.45.0"
+    "@supabase/supabase-js": "2.45.0",
+    "@supabase/gotrue-js": "^2.71.1",
+    "services/mockData": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

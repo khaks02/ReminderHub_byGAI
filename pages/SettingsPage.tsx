@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Calendar, Mail, Facebook, Instagram, Inbox, MessageSquare, Utensils } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
@@ -77,7 +75,7 @@ const SettingsPage: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl">
+        <div className="container mx-auto max-w-2xl p-4 md:p-8 pb-24 md:pb-8">
             <h1 className="text-3xl font-bold mb-2">Settings</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-8">Manage your connected accounts and preferences.</p>
 

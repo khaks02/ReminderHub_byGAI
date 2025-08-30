@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Send, Loader } from 'lucide-react';
 
@@ -20,7 +21,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onNewReminder, isLoading }) => {
     return (
         <form onSubmit={handleSubmit} className="mt-6">
             <label htmlFor="ai-reminder" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Add a new reminder with AI
+                Let's get something on the books. What's on your mind?
             </label>
             <div className="relative">
                 <input
@@ -28,7 +29,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onNewReminder, isLoading }) => {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="e.g., 'Remind me to call mom tomorrow evening'"
+                    placeholder="e.g., 'Remind me to water my cactus army next Friday'"
                     className="w-full pl-4 pr-12 py-3 rounded-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 focus:ring-2 focus:ring-primary focus:outline-none transition"
                     disabled={isLoading}
                 />

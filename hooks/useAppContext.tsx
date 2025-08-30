@@ -1,6 +1,4 @@
 
-
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo } from 'react';
 import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder, UserPreferences } from '../types';
 import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
@@ -8,6 +6,9 @@ import { extractFollowUpReminder } from '../services/geminiService';
 import { useAuth } from './useAuthContext';
 import { supabase } from '../services/supabaseClient';
 import Spinner from '../components/Spinner';
+import { USE_MOCK_DATA } from '../config';
+import { mockDataService } from '../services/mockDataService';
+
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -47,6 +48,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         if (userId) {
             setLoadingData(true);
+            
+            if (USE_MOCK_DATA) {
+                setReminders(mockDataService.getReminders());
+                setReminderTypes(mockDataService.getReminderTypes());
+                setOrders(mockDataService.getOrders());
+                setSavedRecipes(mockDataService.getSavedRecipes());
+                setCart(mockDataService.getCart());
+                setPreferences(mockDataService.getPreferences());
+                setLoadingData(false);
+                return;
+            }
+
             const fetchData = async () => {
                 try {
                     const [remindersRes, typesRes, ordersRes, savedRecipesRes, cartRes, preferencesRes] = await Promise.all([
@@ -84,7 +97,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                         setPreferences(preferencesRes.data);
                     }
                 } catch (error) {
-                    console.error("Error fetching user data from Supabase:", (error as any).message || error);
+                    console.error("[AppContext] Error fetching initial user data from Supabase:", (error as any).message || error);
                 } finally {
                     setLoadingData(false);
                 }
@@ -94,7 +107,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             const channel = supabase.channel(`public:reminders:user_id=eq.${userId}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, async () => {
                      const { data, error } = await supabase.from('reminders').select('*').eq('user_id', userId);
-                     if (error) console.error('Error refetching reminders:', error);
+                     if (error) console.error('[AppContext] Realtime error refetching reminders:', error);
                      else {
                          const updatedReminders = data.map(r => ({ ...r, date: new Date(r.date) }));
                          setReminders(updatedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
@@ -118,10 +131,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }, [userId]);
     
     useEffect(() => {
-        if (userId && !loadingData) {
+        if (userId && !loadingData && !USE_MOCK_DATA) {
             const saveCart = async () => {
                 const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart }, { onConflict: 'user_id' });
-                if (error) console.error('Error saving cart:', (error as any).message || error);
+                if (error) console.error('[AppContext] Error saving cart to Supabase:', (error as any).message || error);
             };
             saveCart();
         }
@@ -144,6 +157,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const addReminder = async (reminder: Omit<Reminder, 'id' | 'user_id'>) => {
         if (!userId) throw new Error("User not authenticated.");
+        if (USE_MOCK_DATA) {
+            await mockDataService.addReminder(reminder);
+            setReminders([...mockDataService.getReminders()]);
+            return;
+        }
         const { data, error } = await supabase.from('reminders').insert({ ...reminder, user_id: userId }).select().single();
         if (error) throw new Error(`Failed to add reminder: ${error.message}`);
         scheduleNotificationsForReminder({ ...data, date: new Date(data.date) } as Reminder);
@@ -151,13 +169,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const deleteReminder = async (id: string) => {
         if (!userId) return;
+        if (USE_MOCK_DATA) {
+            mockDataService.deleteReminder(id);
+            setReminders([...mockDataService.getReminders()]);
+            return;
+        }
         const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', userId);
-        if (error) { console.error('Error deleting reminder:', error); return; }
+        if (error) { console.error('[AppContext] Error deleting reminder:', error); return; }
         cancelNotificationsForReminder(id);
     };
 
     const updateReminder = async (id: string, updates: Partial<Reminder>) => {
         if (!userId) throw new Error("User not authenticated.");
+         if (USE_MOCK_DATA) {
+            await mockDataService.updateReminder(id, updates);
+            setReminders([...mockDataService.getReminders()]);
+            return;
+        }
         const { data, error } = await supabase.from('reminders').update(updates).eq('id', id).eq('user_id', userId).select().single();
         if (error) throw new Error(`Failed to update reminder: ${error.message}`);
         scheduleNotificationsForReminder({ ...data, date: new Date(data.date) } as Reminder);
@@ -169,26 +197,38 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         cancelNotificationsForReminder(id);
 
-        const promise = reminder.recurrenceRule
-            ? updateReminder(id, { date: calculateNextOccurrence(reminder.date, reminder.recurrenceRule), is_completed: false })
+        const promise = reminder.recurrence_rule
+            ? updateReminder(id, { date: calculateNextOccurrence(reminder.date, reminder.recurrence_rule), is_completed: false })
             : updateReminder(id, { is_completed: true });
 
-        promise.catch(err => console.error("Failed to complete reminder:", err));
+        promise.catch(err => console.error("[AppContext] Failed to complete reminder:", err));
     };
 
     const addReminderType = async (newType: ReminderType) => {
         const upperCaseNew = newType.toUpperCase().trim();
         if (!upperCaseNew || reminderTypes.map(t => t.toUpperCase().trim()).includes(upperCaseNew)) return;
 
+        if (USE_MOCK_DATA) {
+            mockDataService.addReminderType(newType);
+            setReminderTypes([...mockDataService.getReminderTypes()]);
+            return;
+        }
+
         setReminderTypes(prev => [...prev, newType.trim()].sort());
 
         if (!userId) return;
         const { error } = await supabase.from('reminder_types').insert({ user_id: userId, name: newType.trim() });
-        if (error) console.error('Error adding reminder type:', error);
+        if (error) console.error('[AppContext] Error saving new reminder type to Supabase:', error);
     };
     
     const addHolidaysBatch = async (holidays: { holidayName: string, date: string }[], country: string): Promise<number> => {
         if (!currentUser) return 0;
+
+        if (USE_MOCK_DATA) {
+            const count = await mockDataService.addHolidaysBatch(holidays, country);
+            setReminders([...mockDataService.getReminders()]);
+            return count;
+        }
         
         const newReminders: Omit<Reminder, 'id' | 'user_id'>[] = [];
         holidays.forEach(holiday => {
@@ -211,7 +251,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         if (newReminders.length > 0) {
             const { data, error } = await supabase.from('reminders').insert(newReminders.map(r => ({...r, user_id: currentUser.id}))).select();
-            if (error) { console.error('Error adding holidays:', error); return 0; }
+            if (error) { console.error('[AppContext] Error adding holidays batch to Supabase:', error); return 0; }
             
             const addedReminders = data.map(r => ({...r, date: new Date(r.date)}));
             addedReminders.forEach(scheduleNotificationsForReminder);
@@ -222,42 +262,34 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
 
     const addToCart = (itemToAdd: Service | CartItem) => {
+        let newCartItem: CartItem;
+
+        // Logic to handle both Service (deprecated) and CartItem types
+        if ('provider' in itemToAdd) { // It's a Service
+             newCartItem = { id: `cart-${Date.now()}`, type: CartItemType.SERVICE, item: itemToAdd, quantity: 1 };
+        } else {
+            newCartItem = { ...itemToAdd, id: itemToAdd.id || `cart-${Date.now()}` };
+        }
+
         setCart(prevCart => {
-            let newCart: CartItem[];
-            if ('provider' in itemToAdd) { 
-                 const existingItem = prevCart.find(item => item.type === CartItemType.SERVICE && item.item.id === itemToAdd.id) as ServiceCartItem | undefined;
-                if (existingItem) {
-                    newCart = prevCart.map(item => item.id === existingItem.id ? { ...item, quantity: (item as ServiceCartItem).quantity + 1 } : item);
-                } else {
-                    const newCartItem: ServiceCartItem = { id: `cart-${Date.now()}`, type: CartItemType.SERVICE, item: itemToAdd, quantity: 1 };
-                    newCart = [...prevCart, newCartItem];
+             // More robust duplicate checking and quantity incrementing
+             if (newCartItem.type === CartItemType.PREPARED_DISH) {
+                const existing = prevCart.find(i => i.type === CartItemType.PREPARED_DISH && i.recipe.id === newCartItem.recipe.id) as PreparedDishCartItem | undefined;
+                if (existing) {
+                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: existing.quantity + 1 } : i);
                 }
-            } else {
-                const newItem = itemToAdd as CartItem;
-                if (newItem.type === CartItemType.PREPARED_DISH) {
-                    const existingDish = prevCart.find(item => item.type === CartItemType.PREPARED_DISH && item.recipe.id === newItem.recipe.id) as PreparedDishCartItem | undefined;
-                    if (existingDish) {
-                         newCart = prevCart.map(item => item.id === existingDish.id ? { ...item, quantity: (item as PreparedDishCartItem).quantity + 1 } : item);
-                    } else {
-                        newCart = [...prevCart, newItem];
-                    }
-                } else if (newItem.type === CartItemType.VENDOR_PRODUCT) {
-                    const existingVp = prevCart.find(item => item.type === CartItemType.VENDOR_PRODUCT && item.productName === newItem.productName && item.vendor === newItem.vendor) as VendorProductCartItem | undefined;
-                    if (existingVp) {
-                        newCart = prevCart.map(item => item.id === existingVp.id ? { ...item, quantity: (item as VendorProductCartItem).quantity + 1 } : item);
-                    } else {
-                         newCart = [...prevCart, newItem];
-                    }
-                } else {
-                    const isDuplicate = prevCart.some(item => 
-                        (item.type === CartItemType.INGREDIENTS_LIST && newItem.type === CartItemType.INGREDIENTS_LIST && item.recipe.id === newItem.recipe.id) ||
-                        (item.type === CartItemType.CHEF_SERVICE && newItem.type === CartItemType.CHEF_SERVICE && item.recipe.id === newItem.recipe.id)
-                    );
-                    if(isDuplicate) { return prevCart; }
-                    newCart = [...prevCart, newItem];
+            } else if (newCartItem.type === CartItemType.VENDOR_PRODUCT) {
+                 const existing = prevCart.find(i => i.type === CartItemType.VENDOR_PRODUCT && i.productName === newCartItem.productName && i.vendor === newCartItem.vendor) as VendorProductCartItem | undefined;
+                 if (existing) {
+                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as VendorProductCartItem).quantity + 1 } : i);
+                }
+            } else if (newCartItem.type === CartItemType.SERVICE) {
+                const existing = prevCart.find(i => i.type === CartItemType.SERVICE && i.item.id === newCartItem.item.id) as ServiceCartItem | undefined;
+                 if (existing) {
+                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as ServiceCartItem).quantity + 1 } : i);
                 }
             }
-            return newCart;
+            return [...prevCart, newCartItem];
         });
     };
 
@@ -305,16 +337,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                         is_completed: false,
                         source: 'Purchase',
                     });
-                } catch (err) { console.error("Failed to add follow-up reminder:", err); }
+                } catch (err) { console.error("[AppContext] Failed to add follow-up reminder:", err); }
             }
+            if (USE_MOCK_DATA) return;
             const { error } = await supabase.from('orders').update({ ...order, followUpReminders: validFollowUps }).eq('id', order.id);
-            if(error) console.error("Error updating order with follow-ups:", error);
+            if(error) console.error("[AppContext] Error updating order with follow-up reminders:", error);
         }
     };
 
 
     const checkout = async () => {
         if (cart.length === 0 || !currentUser) return;
+         if (USE_MOCK_DATA) {
+            mockDataService.checkout();
+            setOrders([...mockDataService.getOrders()]);
+            setCart([]);
+            return;
+        }
+
         const total = cart.reduce((acc, item) => {
             let itemPrice = 0;
             switch (item.type) {
@@ -338,7 +378,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         };
         
         const { data, error } = await supabase.from('orders').insert(newOrder).select().single();
-        if (error) { console.error('Error creating order:', error); return; }
+        if (error) { console.error('[AppContext] Error creating order in Supabase:', error); return; }
         
         const createdOrder: Order = { ...data, date: new Date(data.date) };
         setOrders(prev => [createdOrder, ...prev]);
@@ -348,30 +388,48 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     
     const saveRecipe = async (recipe: Recipe) => {
         if (!currentUser || savedRecipes.some(r => r.id === recipe.id)) return;
+
+        if (USE_MOCK_DATA) {
+            mockDataService.saveRecipe(recipe);
+            setSavedRecipes([...mockDataService.getSavedRecipes()]);
+            return;
+        }
         
         setSavedRecipes(prev => [recipe, ...prev]);
         
         const { error } = await supabase.from('saved_recipes').insert({ user_id: currentUser.id, recipe_id: recipe.id, recipe_data: recipe });
-        if (error) console.error('Error saving recipe:', error);
+        if (error) console.error('[AppContext] Error saving recipe to Supabase:', error);
     };
 
     const unsaveRecipe = async (recipeId: string) => {
         if (!currentUser) return;
         
+        if (USE_MOCK_DATA) {
+            mockDataService.unsaveRecipe(recipeId);
+            setSavedRecipes([...mockDataService.getSavedRecipes()]);
+            return;
+        }
+
         setSavedRecipes(prev => prev.filter(r => r.id !== recipeId));
         
         const { error } = await supabase.from('saved_recipes').delete().eq('user_id', currentUser.id).eq('recipe_id', recipeId);
-        if (error) console.error('Error unsaving recipe:', error);
+        if (error) console.error('[AppContext] Error unsaving recipe from Supabase:', error);
     };
 
     const updatePreferences = async (updates: Partial<Omit<UserPreferences, 'user_id'>>) => {
         if (!currentUser || !preferences) return;
 
+        if (USE_MOCK_DATA) {
+            await mockDataService.updatePreferences(updates);
+            setPreferences({ ...mockDataService.getPreferences() });
+            return;
+        }
+
         const updatedPrefs = { ...preferences, ...updates };
         setPreferences(updatedPrefs);
 
         const { data, error } = await supabase.from('user_preferences').upsert(updatedPrefs).select().single();
-        if (error) console.error('Error updating preferences:', error);
+        if (error) console.error('[AppContext] Error updating user preferences in Supabase:', error);
         else setPreferences(data);
     };
 
@@ -389,6 +447,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         savedRecipes, saveRecipe, unsaveRecipe,
         preferences, updatePreferences, completeOnboarding,
     };
+
+    // This effect is for mock mode only, to keep cart in sync if it's changed.
+    useEffect(() => {
+        if (USE_MOCK_DATA) {
+            mockDataService.cart = cart;
+        }
+    }, [cart]);
 
     return (
         <AppContext.Provider value={value}>

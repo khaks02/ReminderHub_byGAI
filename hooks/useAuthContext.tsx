@@ -3,6 +3,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { User, AuthContextType } from '../types';
 import * as authService from '../services/authService';
+// FIX: Corrected the Supabase subscription type import. The exported member is `Subscription`, not `AuthSubscription`.
 import type { Subscription } from '@supabase/supabase-js';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

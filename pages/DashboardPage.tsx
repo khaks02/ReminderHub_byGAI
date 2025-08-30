@@ -1,12 +1,6 @@
-
-
-
-
-
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
+import { analyzeReminder, getHolidays, getDashboardSuggestions, analyzeSmsForReminders } from '../services/geminiService';
 import ReminderCard from '../components/ReminderCard';
 import ChatInput from '../components/ChatInput';
 import Toast from '../components/Toast';
@@ -15,10 +9,9 @@ import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
 import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion, Recipe, IngredientsCartItem } from '../types';
-import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
-// FIX: Using a namespace import and re-destructuring to work around potential module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
-const { NavLink } = ReactRouterDOM;
+import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud, Plus, MessageSquare, ScanText } from 'lucide-react';
+// FIX: Switched from a namespace import to a direct named import to resolve module resolution errors.
+import { NavLink } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 
 // Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
@@ -51,6 +44,12 @@ const DashboardPage: React.FC = () => {
     const [loadingSuggestions, setLoadingSuggestions] = useState(true);
     const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
     
+    // New state for SMS feature
+    const [smsText, setSmsText] = useState('');
+    const [isScanningSms, setIsScanningSms] = useState(false);
+    const [smsSuggestions, setSmsSuggestions] = useState<(Omit<Reminder, 'id'> & { tempId: string })[]>([]);
+    const [smsScanError, setSmsScanError] = useState<string | null>(null);
+    
     useEffect(() => {
         let isMounted = true;
         const fetchSuggestions = async () => {
@@ -64,7 +63,7 @@ const DashboardPage: React.FC = () => {
                     });
                 }
             } catch (e) {
-                console.error("Failed to load AI suggestions:", e);
+                console.error("[DashboardPage] Failed to load AI suggestions:", e);
                 if (isMounted) {
                     setToast({ message: "Could not load AI suggestions.", type: 'error' });
                 }
@@ -122,7 +121,7 @@ const DashboardPage: React.FC = () => {
                     date: newReminderData.date,
                     type: newReminderData.type || 'General',
                     description: newReminderData.description || '',
-                    recurrenceRule: newReminderData.recurrenceRule || null,
+                    recurrence_rule: newReminderData.recurrence_rule || null,
                     is_completed: false,
                 });
                 setToast({ message: "Reminder created successfully!", type: 'success' });
@@ -211,7 +210,7 @@ const DashboardPage: React.FC = () => {
                     date: data.date || new Date(),
                     type: data.type || 'General',
                     description: data.description || '',
-                    recurrenceRule: data.recurrenceRule,
+                    recurrence_rule: data.recurrence_rule,
                     is_completed: false,
                 };
                 await addReminder(newReminder);
@@ -220,12 +219,13 @@ const DashboardPage: React.FC = () => {
             
             setReminderModalState({ isOpen: false, mode: 'create', initialData: {} });
         } catch (err) {
-            setToast({ message: `Failed to save reminder: ${err instanceof Error ? err.message : ''}`, type: 'error' });
+            const errorMessage = err instanceof Error ? err.message : "Could not save reminder. Please check the details and try again.";
+            setToast({ message: `Failed to save reminder: ${errorMessage}`, type: 'error' });
         }
     };
 
     const handleComplete = (reminder: Reminder) => {
-        if (reminder.recurrenceRule) {
+        if (reminder.recurrence_rule) {
             completeReminder(reminder.id);
             setToast({ message: `'${reminder.title}' completed and rescheduled.`, type: 'success' });
         } else {
@@ -254,10 +254,14 @@ const DashboardPage: React.FC = () => {
         setCurrentDate(newDate);
     };
 
-    const handleAddSuggestion = async (suggestion: Omit<Reminder, 'id'>) => {
+    const handleAddSuggestion = async (suggestion: any) => {
         try {
-            await addReminder(suggestion);
-            setDashboardAI(prev => ({ ...prev, suggestions: prev.suggestions.filter(s => s.title !== suggestion.title) }));
+            // FIX: Destructure the temporary client-side 'id' and pass only the valid reminder data.
+            const { id, ...reminderData } = suggestion;
+            await addReminder(reminderData);
+            
+            // FIX: Use the unique temporary id to filter the suggestion from the UI.
+            setDashboardAI(prev => ({ ...prev, suggestions: prev.suggestions.filter(s => s.id !== id) }));
             setToast({ message: 'Reminder added from suggestion!', type: 'success' });
         } catch (err) {
             setToast({ message: `Failed to add suggestion: ${err instanceof Error ? err.message : ''}`, type: 'error' });
@@ -289,6 +293,45 @@ const DashboardPage: React.FC = () => {
     
     const showToast = (message: string, type: 'success' | 'error') => {
         setToast({ message, type });
+    };
+
+    const handleScanSms = async () => {
+        if (!smsText.trim()) return;
+        setIsScanningSms(true);
+        setSmsScanError(null);
+        setSmsSuggestions([]);
+        try {
+            const results = await analyzeSmsForReminders(smsText);
+            if (results.length === 0) {
+                setToast({ message: "No actionable reminders found in the text.", type: 'success' });
+            } else {
+                setSmsSuggestions(results.map(r => ({ ...r, tempId: `sms-sug-${Math.random()}` })));
+            }
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while scanning.";
+            setSmsScanError(errorMessage);
+            setToast({ message: `Error: ${errorMessage}`, type: 'error' });
+        } finally {
+            setIsScanningSms(false);
+        }
+    };
+
+    const handleAddSmsSuggestion = async (suggestion: Omit<Reminder, 'id'> & { tempId: string }) => {
+        try {
+            const { tempId, ...reminderData } = suggestion;
+            await addReminder({
+                ...reminderData,
+                source: 'SMS',
+            });
+            setSmsSuggestions(prev => prev.filter(s => s.tempId !== tempId));
+            setToast({ message: 'Reminder added from SMS!', type: 'success' });
+        } catch (err) {
+            setToast({ message: `Failed to add reminder: ${err instanceof Error ? err.message : ''}`, type: 'error' });
+        }
+    };
+    
+    const handleDismissSmsSuggestion = (tempId: string) => {
+        setSmsSuggestions(prev => prev.filter(s => s.tempId !== tempId));
     };
 
 
@@ -359,9 +402,8 @@ const DashboardPage: React.FC = () => {
         );
     };
 
-
     return (
-        <div className="container mx-auto">
+        <div className="container mx-auto p-4 md:p-8 pb-24 md:pb-8">
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
              {isHolidayModalOpen && (
                  <HolidayImportModal
@@ -399,34 +441,38 @@ const DashboardPage: React.FC = () => {
                     onAddToCart={handleAddToCartFromVendor}
                 />
             )}
-            <h1 className="text-3xl font-bold mb-2">Today's Reminders</h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">Here's your daily overview. Add a reminder below.</p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                {/* Calendar View */}
+            <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mb-6">Your entire life, neatly organized. Or at least, the parts you tell us about.</p>
+            
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-slate-700">
                     <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-slate-700">
-                         <h2 className="text-xl font-semibold">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
-                         <div className="flex items-center gap-2">
-                             <button onClick={() => setIsHolidayModalOpen(true)} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
-                                <DownloadCloud size={16} /> <span className="hidden sm:inline">Import Holidays</span>
-                             </button>
-                             <button onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
+                        <h2 className="text-xl font-semibold">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate } })} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                                <Plus size={16} /> <span className="hidden sm:inline">Add Reminder</span>
+                            </button>
+                            <button onClick={() => setIsHolidayModalOpen(true)} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                                <DownloadCloud size={16} /> <span className="hidden sm:inline">Import</span>
+                            </button>
+                            <button onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
                             <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeft/></button>
                             <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronRight/></button>
-                         </div>
+                        </div>
                     </div>
                     {renderMonthView()}
                 </div>
-                 {/* AI Assistant View */}
                 <div className="lg:col-span-1">
-                     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 h-full border border-gray-200 dark:border-slate-700">
+                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 h-full border border-gray-200 dark:border-slate-700">
                         <h2 className="text-xl font-semibold mb-4 flex items-center">
                             <Zap size={22} className="mr-2 text-yellow-500"/>
                             AI Assistant
                         </h2>
                         {loadingSuggestions ? (
-                            <div className="flex justify-center items-center h-48"><Spinner /></div>
+                            <div className="flex flex-col justify-center items-center h-48">
+                                <Spinner />
+                                <p className="mt-2 text-sm text-gray-500">Brewing up some brilliant suggestions...</p>
+                            </div>
                         ) : (
                             <>
                                 {dashboardAI.dailyBriefing && (
@@ -462,35 +508,67 @@ const DashboardPage: React.FC = () => {
                     </div>
                 </div>
             </div>
-            
+
             <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="flex-shrink-0 grid grid-cols-4 md:grid-cols-2 gap-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full" title="Google Calendar"><Calendar className="w-6 h-6 text-blue-500" /></div>
-                        <div className="p-3 bg-cyan-100 dark:bg-cyan-900/50 rounded-full" title="Outlook Calendar"><Mail className="w-6 h-6 text-cyan-500" /></div>
-                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-full" title="Facebook Events"><Facebook className="w-6 h-6 text-indigo-600" /></div>
-                        <div className="p-3 bg-pink-100 dark:bg-pink-900/50 rounded-full" title="Instagram"><Instagram className="w-6 h-6 text-pink-500" /></div>
-                    </div>
-                    <div className="text-center md:text-left">
-                        <h2 className="text-xl font-semibold mb-2">Get the Full Picture</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">
-                            Connect your Google, Outlook, and social media calendars to see all your events in one place and receive smarter AI suggestions.
-                        </p>
-                        <NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
-                            Connect Accounts
-                        </NavLink>
-                    </div>
-                </div>
+                <ChatInput onNewReminder={handleNewReminder} isLoading={isLoading} />
             </div>
-            
-            <ChatInput onNewReminder={handleNewReminder} isLoading={isLoading} />
-            
-            <div className="mt-8">
-                 <h2 className="text-2xl font-bold mb-4">
-                    Reminders for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                 </h2>
+
+            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-3">
+                    <MessageSquare className="text-green-500"/>
+                    Import Reminders from SMS
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Copy and paste messages from your SMS app below. Our AI will scan them for potential reminders like appointments or bill payments. Your data is not stored.
+                </p>
+                <textarea
+                    value={smsText}
+                    onChange={(e) => setSmsText(e.target.value)}
+                    placeholder="Paste one or more SMS messages here..."
+                    className="w-full h-32 p-3 border border-gray-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 focus:ring-primary focus:border-primary transition"
+                    disabled={isScanningSms}
+                />
+                <button
+                    onClick={handleScanSms}
+                    className="mt-4 inline-flex items-center justify-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors disabled:bg-primary/60"
+                    disabled={isScanningSms || !smsText.trim()}
+                >
+                    {isScanningSms ? <><Spinner size="5" /> Scanning...</> : <><ScanText size={18}/> Scan SMS for Reminders</>}
+                </button>
+
+                {smsScanError && <p className="mt-4 text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md text-sm">{smsScanError}</p>}
+
+                {smsSuggestions.length > 0 && (
+                    <div className="mt-6 border-t border-gray-200 dark:border-slate-700 pt-4">
+                        <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-3">Found {smsSuggestions.length} potential reminder(s):</h3>
+                        <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                            {smsSuggestions.map(sug => (
+                                <div key={sug.tempId} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg animate-fade-in">
+                                    <div>
+                                        <p className="font-semibold">{sug.title} <span className="text-xs font-normal text-gray-500">on {sug.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}</span></p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sug.description}</p>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button onClick={() => handleAddSmsSuggestion(sug)} title="Add Reminder" className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 rounded-full">
+                                            <PlusCircle size={18}/>
+                                        </button>
+                                        <button onClick={() => handleDismissSmsSuggestion(sug.tempId)} title="Dismiss" className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
+                                            <XCircle size={18}/>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div>
+                <h2 className="text-2xl font-bold mb-4">
+                    Agenda for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </h2>
                 {remindersForSelectedDay.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {remindersForSelectedDay.map(reminder => (
                             <ReminderCard
                                 key={reminder.id}
@@ -507,10 +585,34 @@ const DashboardPage: React.FC = () => {
                     </div>
                 ) : (
                     <div className="text-center py-12 px-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border-2 border-dashed border-gray-200 dark:border-slate-700">
-                         <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">All Clear for Today!</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-2">You have no reminders for this day. Use the AI chat below to add one!</p>
+                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Looks like a free day!</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-2">Perfect for procrastinating on tomorrow's tasks. Or, you know, adding a new reminder.</p>
+                         <button onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate } })} className="mt-4 inline-flex items-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
+                            <Plus size={18}/>
+                            Add Reminder
+                        </button>
                     </div>
                 )}
+            </div>
+            
+            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="flex-shrink-0 grid grid-cols-4 md:grid-cols-2 gap-4">
+                        <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full" title="Google Calendar"><Calendar className="w-6 h-6 text-blue-500" /></div>
+                        <div className="p-3 bg-cyan-100 dark:bg-cyan-900/50 rounded-full" title="Outlook Calendar"><Mail className="w-6 h-6 text-cyan-500" /></div>
+                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-full" title="Facebook Events"><Facebook className="w-6 h-6 text-indigo-600" /></div>
+                        <div className="p-3 bg-pink-100 dark:bg-pink-900/50 rounded-full" title="Instagram"><Instagram className="w-6 h-6 text-pink-500" /></div>
+                    </div>
+                    <div className="text-center md:text-left">
+                        <h2 className="text-xl font-semibold mb-2">Our AI is getting lonely...</h2>
+                        <p className="text-gray-500 dark:text-gray-400 mb-4">
+                            Connect your Google, Outlook, and social media accounts so it can make more friends and find more reminders for you.
+                        </p>
+                        <NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
+                            Connect Accounts
+                        </NavLink>
+                    </div>
+                </div>
             </div>
         </div>
     );
