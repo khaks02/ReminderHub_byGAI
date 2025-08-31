@@ -1,20 +1,20 @@
 import React from 'react';
-// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
-import { useLocation, Link } from 'react-router-dom';
+// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
+import * as ReactRouterDOM from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
 const Breadcrumb: React.FC = () => {
-    const location = useLocation();
+    const location = ReactRouterDOM.useLocation();
     const pathnames = location.pathname.split('/').filter((x) => x);
 
     return (
         <nav className="flex items-center text-sm text-gray-500 dark:text-gray-400" aria-label="Breadcrumb">
             <ol className="inline-flex items-center space-x-1 md:space-x-2">
                 <li className="inline-flex items-center">
-                    <Link to="/" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
+                    <ReactRouterDOM.Link to="/" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
                         <Home className="w-4 h-4 mr-2" />
                         Dashboard
-                    </Link>
+                    </ReactRouterDOM.Link>
                 </li>
                 {pathnames.map((value, index) => {
                     const to = `/${pathnames.slice(0, index + 1).join('/')}`;
@@ -39,9 +39,9 @@ const Breadcrumb: React.FC = () => {
                                 {isLast ? (
                                     <span className="ml-1 md:ml-2 font-medium text-content-light dark:text-content-dark">{name}</span>
                                 ) : (
-                                    <Link to={to} className="ml-1 md:ml-2 hover:text-primary dark:hover:text-primary-light transition-colors">
+                                    <ReactRouterDOM.Link to={to} className="ml-1 md:ml-2 hover:text-primary dark:hover:text-primary-light transition-colors">
                                         {name}
-                                    </Link>
+                                    </ReactRouterDOM.Link>
                                 )}
                             </div>
                         </li>

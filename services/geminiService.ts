@@ -31,14 +31,43 @@ const getMockServiceRecommendations = async (reminder: Reminder): Promise<Activi
     }
     
     // Health & Appointments
-    if (type.includes('appointment') || type.includes('health') || type.includes('pet care')) {
+    if (type.includes('appointment') || type.includes('health') || type.includes('pet care') || title.includes('dentist')) {
         const isPet = type.includes('pet care');
+        const isDental = type.includes('dentist') || title.includes('dentist') || type.includes('dental') || title.includes('dental');
+        
+        if (isDental) {
+            return [
+                {
+                    activity: 'Book a Dental Check-up',
+                    vendors: [
+                        { name: 'Practo', description: 'Find and book appointments with top-rated dentists.', priceRange: '₹500-2000', rating: 4.7, productQuery: 'dentist appointment', customerCare: 'support@practo.com' },
+                        { name: 'Clove Dental', description: 'India\'s largest dental clinic chain, book online.', priceRange: '₹500-2500', rating: 4.5, productQuery: 'dental check-up', customerCare: 'contact@clovedental.in' }
+                    ]
+                },
+                {
+                    activity: 'Shop for Dental Care',
+                    vendors: [
+                         { name: 'Amazon', description: 'Wide range of electric toothbrushes, floss, and mouthwash.', priceRange: '₹200-5000', rating: 4.5, productQuery: 'dental care products', customerCare: '1800-3000-9009' },
+                         { name: 'Apollo Pharmacy', description: 'Medicated toothpaste and other dental hygiene products.', priceRange: '₹100-1000', rating: 4.4, productQuery: 'oral hygiene', customerCare: 'helpdesk@apollo247.com' }
+                    ]
+                }
+            ];
+        }
+
+        if (isPet) {
+            return [{
+                activity: 'Veterinary Services',
+                vendors: [
+                    { name: 'Justdial', description: 'Find local veterinary clinics and pet services.', priceRange: '₹500-2000', rating: 4.2, productQuery: 'veterinary clinics near me', customerCare: '088888 88888'},
+                    { name: 'Supertails', description: 'Online vet consultations and pet supplies.', priceRange: '₹400-1500', rating: 4.6, productQuery: 'online vet consultation', customerCare: 'support@supertails.com'}
+                ]
+            }];
+        }
+        
+        // Default health appointment
         return [{
-            activity: isPet ? 'Veterinary Services' : 'Book a Consultation',
-            vendors: isPet ? [
-                { name: 'Justdial', description: 'Find local veterinary clinics and pet services.', priceRange: '₹500-2000', rating: 4.2, productQuery: 'veterinary clinics near me', customerCare: '088888 88888'},
-                { name: 'Supertails', description: 'Online vet consultations and pet supplies.', priceRange: '₹400-1500', rating: 4.6, productQuery: 'online vet consultation', customerCare: 'support@supertails.com'}
-            ] : [
+            activity: 'Book a Consultation',
+            vendors: [
                 { name: 'Practo', description: 'Find and book doctor appointments online.', priceRange: '₹500-1500', rating: 4.6, productQuery: 'doctor appointment', customerCare: 'support@practo.com' },
                 { name: 'Apollo 24/7', description: 'Online pharmacy and doctor consultations.', priceRange: '₹400-1200', rating: 4.4, productQuery: 'online doctor', customerCare: 'helpdesk@apollo247.com' }
             ]
@@ -75,13 +104,35 @@ const getMockServiceRecommendations = async (reminder: Reminder): Promise<Activi
         ];
     }
     
-    // Home & Maintenance
-    if (type.includes('home') || type.includes('car maintenance') || type.includes('home improvement')) {
+    // Car Maintenance
+    if (type.includes('car maintenance')) {
         return [{
-            activity: 'Home & Auto Services',
+            activity: 'Auto Services',
+            vendors: [
+                { name: 'GoMechanic', description: 'Car servicing and repairs with free pick-up and delivery.', priceRange: '₹1500-10000', rating: 4.3, productQuery: 'car service', customerCare: '93888 93888' },
+                { name: 'MyTVS', description: 'Multi-brand car service and repair network.', priceRange: '₹2000-12000', rating: 4.2, productQuery: 'car repair', customerCare: 'help@mytvs.in' }
+            ]
+        }];
+    }
+
+    // Home & Maintenance
+    if (type.includes('home') || type.includes('home improvement')) {
+        if (title.includes('paint')) {
+            return [{
+                activity: 'Painting Services & Supplies',
+                vendors: [
+                    { name: 'Urban Company', description: 'Professional home painting services.', priceRange: '₹8000-50000', rating: 4.7, productQuery: 'home painting services', customerCare: 'help@urbancompany.com' },
+                    { name: 'Asian Paints', description: 'Find inspiration, buy paint, and locate certified painters.', priceRange: 'Varies', rating: 4.6, productQuery: 'wall paint', customerCare: '1800-209-5678' }
+                ]
+            }];
+        }
+        
+        // Default home services for other tasks like cleaning, repairs, etc.
+        return [{
+            activity: 'Home Services',
             vendors: [
                 { name: 'Urban Company', description: 'Professional home services like cleaning, repairs, and more.', priceRange: '₹500-5000', rating: 4.7, productQuery: 'home cleaning services', customerCare: 'help@urbancompany.com' },
-                { name: 'GoMechanic', description: 'Car servicing and repairs with free pick-up and delivery.', priceRange: '₹1500-10000', rating: 4.3, productQuery: 'car service', customerCare: '93888 93888' }
+                { name: 'Housejoy', description: 'On-demand home services including plumbing, electrical, and cleaning.', priceRange: '₹400-4000', rating: 4.4, productQuery: 'plumbing services', customerCare: 'support@housejoy.in' }
             ]
         }];
     }
@@ -197,7 +248,6 @@ const RECIPE_SCHEMA = {
         description: { type: "STRING", description: "A brief, enticing description of the dish." },
         ingredients: { type: "ARRAY", items: { type: "STRING" } },
         instructions: { type: "ARRAY", items: { type: "STRING" } },
-        imageUrl: { type: "STRING", description: "A placeholder image URL from an API like picsum.photos. The URL should be a direct image link." },
         isVeg: { type: "BOOLEAN" },
         cuisine: { type: "STRING" },
         rating: { type: "NUMBER", description: "A rating out of 5, e.g., 4.5" },
@@ -238,8 +288,85 @@ const VENDOR_RECOMMENDATION_SCHEMA = {
     }
 };
 
+const MOCK_PRODUCT_DETAILS_SCHEMA = {
+    type: "ARRAY",
+    items: {
+        type: "OBJECT",
+        properties: {
+            productName: { type: "STRING" },
+            price: { type: "NUMBER", description: "Estimated price in INR." },
+        },
+        required: ["productName", "price"]
+    }
+};
+
 
 // --- Core AI Service Functions ---
+
+// Placeholder for failed image generation
+const PLACEHOLDER_IMAGE_URL = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNlNWU3ZWwiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1zaXplPSIxNnB4IiBmaWxsPSIjYWRhZmI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5JbWFnZSBVbmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=';
+
+const generateProductImage = async (productName: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: `A professional, clean product photograph of "${productName}" for an e-commerce website, on a plain white background.`,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/jpeg',
+              aspectRatio: '1:1',
+            },
+        });
+
+        const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+        if (base64ImageBytes) {
+            return `data:image/jpeg;base64,${base64ImageBytes}`;
+        }
+        console.warn(`[GeminiService] Image generation for "${productName}" returned no image bytes.`);
+        return PLACEHOLDER_IMAGE_URL;
+    } catch (error) {
+        console.error(`[GeminiService] Image generation failed for "${productName}":`, error);
+        return PLACEHOLDER_IMAGE_URL;
+    }
+}
+
+export const getMockProductsForVendor = async (vendorName: string, productQuery: string): Promise<{ productName: string; price: number; imageUrl: string }[]> => {
+    if (USE_MOCK_DATA) {
+        await new Promise(res => setTimeout(res, 600));
+        return Array.from({ length: 4 }).map((_, i) => ({
+            productName: `${productQuery} Option ${i + 1}`,
+            price: Math.floor(Math.random() * (3000 - 500 + 1) + 500),
+            imageUrl: `https://picsum.photos/seed/${encodeURIComponent(productQuery)}-${i}/200/200`
+        }));
+    }
+
+    // Step 1: Generate product details (name & price)
+    const detailsPrompt = `You are a shopping assistant for a user in India. For the vendor "${vendorName}", generate a list of 4 realistic and specific product or service suggestions a user might find when searching for "${productQuery}". Provide only a concise product name and an estimated price in INR.`;
+
+    const detailsConfig = {
+        responseMimeType: "application/json",
+        responseSchema: MOCK_PRODUCT_DETAILS_SCHEMA
+    };
+
+    const productDetails = await generateAndParseJson(detailsPrompt, detailsConfig);
+
+    if (!Array.isArray(productDetails)) {
+        throw new Error("AI returned an invalid format for mock product details.");
+    }
+    
+    // Step 2: Generate images for each product in parallel
+    const productsWithImages = await Promise.all(
+        productDetails.map(async (product: { productName: string, price: number }) => {
+            const imageUrl = await generateProductImage(product.productName);
+            return {
+                ...product,
+                imageUrl
+            };
+        })
+    );
+
+    return productsWithImages;
+}
 
 export const analyzeReminder = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
     if (USE_MOCK_DATA) {
@@ -384,7 +511,7 @@ export const getServiceRecommendations = async (reminder: Reminder): Promise<Act
         const prompt = `Based on the reminder titled "${reminder.title}" with description "${reminder.description}", follow these steps:
 1. Identify 1-2 distinct activities a user might need to perform (e.g., 'Buy a Gift', 'Book a Doctor Appointment').
 2. For each activity, brainstorm a single, generic but searchable product or service query. Example: for 'Buy a Gift' for a birthday, the query could be 'birthday gifts'. For 'Dentist Appointment', it could be 'dental clinics nearby'.
-3. For each activity and its corresponding query, find 2-3 popular Indian vendors that provide this product/service.
+3. For each activity and its corresponding query, find 2-3 popular and **highly relevant** Indian vendors that provide this product/service. For example, for "paint the house", suggest painting services or paint stores, not car mechanics.
 4. For each vendor, provide: their name, a short description, a realistic price range in INR (as a string like "₹100-1000"), a rating out of 5, the product query from step 2, and a customer care contact (phone or email if available).`;
         
         const config = { responseMimeType: "application/json", responseSchema: VENDOR_RECOMMENDATION_SCHEMA };
@@ -517,12 +644,12 @@ export const getRecipesForReminder = async (reminder: Reminder): Promise<Recipe[
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(prompt, config);
-    if (!Array.isArray(recipes)) {
+    const recipesData = await generateAndParseJson(prompt, config);
+    if (!Array.isArray(recipesData)) {
         throw new Error("AI returned an invalid format for reminder recipes.");
     }
-    recipeForReminderCache.set(cacheKey, recipes);
-    return recipes;
+    recipeForReminderCache.set(cacheKey, recipesData);
+    return recipesData;
 }
 
 export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[]> => {
@@ -531,16 +658,16 @@ export const getRecipes = async (query: string, isVeg: boolean): Promise<Recipe[
         const allRecipes = mockDataService.getRecipes();
         return allRecipes.filter(r => r.name.toLowerCase().includes(query.toLowerCase()) && (isVeg ? r.isVeg : true)).slice(0,8);
     }
-    const prompt = `Find 8 diverse recipes that match the query: "${query}". The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe, including a placeholder image URL.`;
+    const prompt = `Find 8 diverse recipes that match the query: "${query}". The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(prompt, config);
-    if (!Array.isArray(recipes)) {
+    const recipesData = await generateAndParseJson(prompt, config);
+    if (!Array.isArray(recipesData)) {
         throw new Error("AI returned an invalid format for recipe search.");
     }
-    return recipes;
+    return recipesData;
 }
 
 export const getRecipesByIngredients = async (ingredients: string, isVeg: boolean): Promise<Recipe[]> => {
@@ -550,16 +677,20 @@ export const getRecipesByIngredients = async (ingredients: string, isVeg: boolea
         const searchIngredients = ingredients.toLowerCase().split(',').map(i => i.trim());
         return allRecipes.filter(r => (isVeg ? r.isVeg : true) && searchIngredients.some(si => r.ingredients.join(' ').toLowerCase().includes(si))).slice(0, 4);
     }
-    const prompt = `Based on the following ingredients a user has: "${ingredients}", suggest 2-3 creative recipes they could make. The user preference is vegetarian-only: ${isVeg}. Provide full details for each recipe, including a placeholder image URL.`;
+    const prompt = `You are a creative chef for a user in India. A user has the following ingredients: "${ingredients}". 
+    Based *only* on these ingredients and common Indian pantry staples (like salt, pepper, oil, basic spices like turmeric, cumin, coriander), generate up to 4 creative recipes.
+    The user's preference for vegetarian-only is: ${isVeg}. 
+    For each recipe, provide all the details as per the required JSON schema. 
+    If you cannot generate any valid recipes from the given ingredients, return an empty array.`;
     const config = {
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(prompt, config);
-    if (!Array.isArray(recipes)) {
+    const recipesData = await generateAndParseJson(prompt, config);
+    if (!Array.isArray(recipesData)) {
         throw new Error("AI returned an invalid format for ingredient-based recipe search.");
     }
-    return recipes;
+    return recipesData;
 }
 
 export const getDailyRecommendations = async (isVeg: boolean, history: string[]): Promise<DailyRecommendationResponse> => {
@@ -589,8 +720,16 @@ export const getDailyRecommendations = async (isVeg: boolean, history: string[])
             required: ["theme", "breakfast", "lunch", "hitea", "dinner", "all_time_snacks"]
         }
     };
-    const recommendations = await generateAndParseJson(prompt, config);
-    return recommendations as DailyRecommendationResponse;
+    const recommendationsData = await generateAndParseJson(prompt, config);
+
+    return {
+        theme: recommendationsData.theme,
+        breakfast: recommendationsData.breakfast || [],
+        lunch: recommendationsData.lunch || [],
+        hitea: recommendationsData.hitea || [],
+        dinner: recommendationsData.dinner || [],
+        all_time_snacks: recommendationsData.all_time_snacks || [],
+    };
 }
 
 export const shuffleRecipeCategory = async (category: string, isVeg: boolean, history: string[]): Promise<Recipe[]> => {
@@ -608,11 +747,11 @@ export const shuffleRecipeCategory = async (category: string, isVeg: boolean, hi
         responseMimeType: "application/json",
         responseSchema: { type: "ARRAY", items: RECIPE_SCHEMA }
     };
-    const recipes = await generateAndParseJson(prompt, config);
-    if (!Array.isArray(recipes)) {
+    const recipesData = await generateAndParseJson(prompt, config);
+    if (!Array.isArray(recipesData)) {
         throw new Error("AI returned an invalid format for recipe shuffle.");
     }
-    return recipes;
+    return recipesData;
 }
 
 export const getVendorsForRecipeAction = async (recipe: Recipe, action: string): Promise<ActivityRecommendation[]> => {

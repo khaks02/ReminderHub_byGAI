@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
-import { HashRouter, NavLink, Route, Routes, useLocation, Navigate, useNavigate } from 'react-router-dom';
+// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
+import * as ReactRouterDOM from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 import { AuthProvider, useAuth } from './hooks/useAuthContext';
@@ -27,7 +27,7 @@ interface NavItemProps {
 }
 
 const HeaderNavItem = ({ to, children }: { to: string; children: React.ReactNode }) => (
-  <NavLink
+  <ReactRouterDOM.NavLink
     to={to}
     className={({ isActive }) =>
       `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -38,28 +38,28 @@ const HeaderNavItem = ({ to, children }: { to: string; children: React.ReactNode
     }
   >
     {children}
-  </NavLink>
+  </ReactRouterDOM.NavLink>
 );
 
 const BottomNavItem = ({ to, icon, children }: NavItemProps) => (
-  <NavLink
+  <ReactRouterDOM.NavLink
     to={to}
     end
     className={({ isActive }) =>
-      `flex flex-col items-center justify-center w-full pt-2 pb-1 text-xs transition-colors ${
+      `flex flex-col items-center justify-center w-full pt-2 pb-1 text-xs transition-all duration-200 rounded-md ${
         isActive
-          ? 'text-primary'
+          ? 'text-primary bg-primary/10'
           : 'text-gray-500 dark:text-gray-400 hover:text-primary'
       }`
     }
   >
     {icon}
     <span className="mt-1 truncate">{children}</span>
-  </NavLink>
+  </ReactRouterDOM.NavLink>
 );
 
 const HeaderTitle = () => {
-    const location = useLocation();
+    const location = ReactRouterDOM.useLocation();
     const path = location.pathname.split('/')[1] || 'dashboard';
     
     const titleMapping: { [key: string]: string } = {
@@ -72,20 +72,20 @@ const HeaderTitle = () => {
         analytics: 'Analytics',
     };
 
-    const title = titleMapping[path] || 'ReminderHub AI';
+    const title = titleMapping[path] || 'myreminder';
     
     return <h1 className="text-xl font-semibold text-content-light dark:text-content-dark">{title}</h1>;
 };
 
 
-const AppContent = () => {
+const MainAppLayout = () => {
   const [theme, toggleTheme] = useTheme();
   const { cartCount, preferences, completeOnboarding } = useAppContext();
   const { logout, currentUser } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   // FIX: Use the hook directly from the import.
-  const navigate = useNavigate();
+  const navigate = ReactRouterDOM.useNavigate();
   
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -111,7 +111,7 @@ const AppContent = () => {
 
   const handleLogout = async () => {
       await logout();
-      navigate('/login');
+      navigate('/admin-login');
   };
 
   const handleFinishOnboarding = () => {
@@ -138,11 +138,11 @@ const AppContent = () => {
         <div className="flex flex-col flex-1 h-screen">
             <OnboardingModal isOpen={showOnboarding} onFinish={handleFinishOnboarding} />
             {/* Header */}
-            <header className="sticky top-0 z-20 flex items-center justify-between p-4 h-16 border-b border-gray-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+            <header className="sticky top-0 z-20 flex items-center justify-between p-4 h-16 border-b border-gray-200 dark:border-accent-dark bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm">
                 <div className="flex items-center gap-6">
                     {/* Desktop View: Logo + Nav */}
                     <div className="hidden md:flex items-center gap-6">
-                        <h1 className="text-2xl font-bold text-primary">ReminderHub</h1>
+                        <h1 className="text-2xl font-bold text-primary">myreminder</h1>
                         <nav className="flex items-center gap-2">
                             <HeaderNavItem to="/">Dashboard</HeaderNavItem>
                             <HeaderNavItem to="/recipes">Today's Recipes</HeaderNavItem>
@@ -156,14 +156,14 @@ const AppContent = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    <NavLink to="/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
+                    <ReactRouterDOM.NavLink to="/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
                         <ShoppingCart />
                         {cartCount > 0 && (
                             <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
                                 {cartCount}
                             </span>
                         )}
-                    </NavLink>
+                    </ReactRouterDOM.NavLink>
 
                      {/* User Menu Dropdown */}
                     <div className="relative" ref={userMenuRef}>
@@ -176,27 +176,27 @@ const AppContent = () => {
                         </button>
                         {isUserMenuOpen && (
                              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-md shadow-lg z-20 border border-gray-200 dark:border-slate-700 py-1">
-                                <NavLink 
+                                <ReactRouterDOM.NavLink 
                                     to="/profile" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     <User size={16}/> My Profile
-                                </NavLink>
-                                 <NavLink 
+                                </ReactRouterDOM.NavLink>
+                                 <ReactRouterDOM.NavLink 
                                     to="/analytics" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     <BarChart2 size={16}/> Analytics
-                                </NavLink>
-                                 <NavLink 
+                                </ReactRouterDOM.NavLink>
+                                 <ReactRouterDOM.NavLink 
                                     to="/settings" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     <Settings size={16}/> Settings
-                                </NavLink>
+                                </ReactRouterDOM.NavLink>
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
                                 <ThemeToggle inMenu={true} />
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
@@ -214,27 +214,27 @@ const AppContent = () => {
             </header>
             
             {/* Breadcrumb Bar */}
-            <div className="md:block sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800 px-4 md:px-8 py-3">
+            <div className="md:block sticky top-16 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-accent-dark px-4 md:px-8 py-3">
               <Breadcrumb />
             </div>
             
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto">
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/recipes" element={<RecipesPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/cart" element={<CartPage />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+            <main className="flex-1 overflow-y-auto bg-subtle-light/50 dark:bg-subtle-dark/50">
+              <ReactRouterDOM.Routes>
+                <ReactRouterDOM.Route path="/" element={<DashboardPage />} />
+                <ReactRouterDOM.Route path="/recipes" element={<RecipesPage />} />
+                <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
+                <ReactRouterDOM.Route path="/cart" element={<CartPage />} />
+                <ReactRouterDOM.Route path="/orders" element={<OrdersPage />} />
+                <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
+                <ReactRouterDOM.Route path="/analytics" element={<AnalyticsPage />} />
+                <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/" replace />} />
+              </ReactRouterDOM.Routes>
             </main>
         </div>
         
         {/* Mobile Bottom Nav */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-accent-dark flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)] p-1 gap-1">
             <BottomNavItem to="/" icon={<Home size={24} />}>Dashboard</BottomNavItem>
             <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Recipes</BottomNavItem>
         </nav>
@@ -254,29 +254,29 @@ const AppRoutes = () => {
     }
     
     return (
-        <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route 
+        <ReactRouterDOM.Routes>
+            <ReactRouterDOM.Route path="/admin-login" element={<LoginPage />} />
+            <ReactRouterDOM.Route 
                 path="/*"
                 element={
                     <ProtectedRoute>
                         <AppProvider>
-                            <AppContent />
+                            <MainAppLayout />
                         </AppProvider>
                     </ProtectedRoute>
                 }
             />
-        </Routes>
+        </ReactRouterDOM.Routes>
     );
 };
 
 
 const App = () => (
-    <HashRouter>
+    <ReactRouterDOM.HashRouter>
         <AuthProvider>
             <AppRoutes />
         </AuthProvider>
-    </HashRouter>
+    </ReactRouterDOM.HashRouter>
 );
 
 

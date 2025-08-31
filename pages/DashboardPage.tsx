@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { analyzeReminder, getHolidays, getDashboardSuggestions, analyzeSmsForReminders } from '../services/geminiService';
+import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
 import ReminderCard from '../components/ReminderCard';
 import ChatInput from '../components/ChatInput';
 import Toast from '../components/Toast';
@@ -9,9 +9,9 @@ import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
 import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion, Recipe, IngredientsCartItem } from '../types';
-import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud, Plus, MessageSquare, ScanText } from 'lucide-react';
-// FIX: Switched from a namespace import to a direct named import to resolve module resolution errors.
-import { NavLink } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
+// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
+import * as ReactRouterDOM from 'react-router-dom';
 import Spinner from '../components/Spinner';
 
 // Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
@@ -44,12 +44,27 @@ const DashboardPage: React.FC = () => {
     const [loadingSuggestions, setLoadingSuggestions] = useState(true);
     const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
     
-    // New state for SMS feature
-    const [smsText, setSmsText] = useState('');
-    const [isScanningSms, setIsScanningSms] = useState(false);
-    const [smsSuggestions, setSmsSuggestions] = useState<(Omit<Reminder, 'id'> & { tempId: string })[]>([]);
-    const [smsScanError, setSmsScanError] = useState<string | null>(null);
-    
+    // State for animations and UI
+    const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+    const [completingId, setCompletingId] = useState<string | null>(null);
+    const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
+    const prevRemindersRef = useRef<Reminder[]>(reminders);
+
+    // Detect new reminders for animation
+     useEffect(() => {
+        if (prevRemindersRef.current.length < reminders.length) {
+            const prevIds = new Set(prevRemindersRef.current.map(r => r.id));
+            const newReminder = reminders.find(r => !prevIds.has(r.id));
+            if (newReminder) {
+                setNewlyAddedId(newReminder.id);
+                const timer = setTimeout(() => setNewlyAddedId(null), 500); // Animation duration
+                return () => clearTimeout(timer);
+            }
+        }
+        prevRemindersRef.current = reminders;
+    }, [reminders]);
+
+
     useEffect(() => {
         let isMounted = true;
         const fetchSuggestions = async () => {
@@ -96,49 +111,35 @@ const DashboardPage: React.FC = () => {
         return (remindersByDate.get(key) || []).filter(r => !r.is_completed);
     }, [selectedDate, remindersByDate]);
 
-
     const handleNewReminder = useCallback(async (prompt: string) => {
         setIsLoading(true);
         try {
             const newReminderData = await analyzeReminder(prompt);
             
-            if (!newReminderData.title || !newReminderData.date) {
-                setReminderModalState({
-                    isOpen: true,
-                    mode: 'create',
-                    initialData: {
-                        ...newReminderData,
-                        description: newReminderData.description || (newReminderData.title ? '' : prompt),
-                        title: newReminderData.title || ''
-                    }
-                });
-            } else {
-                if (newReminderData.type && !reminderTypes.some(t => t.toLowerCase() === newReminderData.type!.toLowerCase())) {
-                    addReminderType(newReminderData.type);
-                }
-                await addReminder({
-                    title: newReminderData.title,
-                    date: newReminderData.date,
-                    type: newReminderData.type || 'General',
-                    description: newReminderData.description || '',
-                    recurrence_rule: newReminderData.recurrence_rule || null,
-                    is_completed: false,
-                });
-                setToast({ message: "Reminder created successfully!", type: 'success' });
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-            setToast({ message: `Error: ${errorMessage}`, type: 'error' });
-            // Open modal with the original prompt if AI fails
             setReminderModalState({
                 isOpen: true,
                 mode: 'create',
-                initialData: { description: prompt }
+                initialData: {
+                    ...newReminderData,
+                    description: newReminderData.description || (newReminderData.title ? '' : prompt),
+                    title: newReminderData.title || '',
+                    date: newReminderData.date || selectedDate, // Pre-fill with selected date if AI doesn't find one
+                }
+            });
+
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+            setToast({ message: `Error: ${errorMessage}`, type: 'error' });
+            // Fallback: Open modal with just the original prompt in description
+            setReminderModalState({
+                isOpen: true,
+                mode: 'create',
+                initialData: { description: prompt, date: selectedDate }
             });
         } finally {
             setIsLoading(false);
         }
-    }, [addReminder, addReminderType, reminderTypes]);
+    }, [selectedDate]);
 
 
     const handleVendorSelect = (vendor: VendorSuggestion, reminder: Reminder) => {
@@ -160,18 +161,6 @@ const DashboardPage: React.FC = () => {
         };
         addToCart(newCartItem);
         setToast({ message: `${item.productName} added to cart!`, type: 'success' });
-    };
-
-    const handleAddIngredientsToCart = (recipe: Recipe, reminder?: Reminder) => {
-        const newCartItem: IngredientsCartItem = {
-            id: `recipe-ing-${recipe.id}-${Date.now()}`,
-            type: CartItemType.INGREDIENTS_LIST,
-            recipe,
-            reminderId: reminder?.id,
-            reminderTitle: reminder?.title,
-        };
-        addToCart(newCartItem);
-        setToast({ message: `Ingredients for ${recipe.name} added to cart!`, type: 'success' });
     };
 
     const handleDelete = (id: string) => {
@@ -224,13 +213,17 @@ const DashboardPage: React.FC = () => {
         }
     };
 
-    const handleComplete = (reminder: Reminder) => {
-        if (reminder.recurrence_rule) {
-            completeReminder(reminder.id);
-            setToast({ message: `'${reminder.title}' completed and rescheduled.`, type: 'success' });
-        } else {
-            setCompletionCandidate(reminder);
-        }
+    const handleStartCompleteAnimation = (reminder: Reminder) => {
+        setCompletingId(reminder.id);
+        setTimeout(() => {
+            if (reminder.recurrence_rule) {
+                completeReminder(reminder.id);
+                setToast({ message: `'${reminder.title}' completed and rescheduled.`, type: 'success' });
+            } else {
+                setCompletionCandidate(reminder);
+            }
+            // The item will be removed from the list, so we don't need to reset completingId for it
+        }, 400); // Corresponds to animation duration
     };
 
     const handleConfirmCompletion = () => {
@@ -295,45 +288,9 @@ const DashboardPage: React.FC = () => {
         setToast({ message, type });
     };
 
-    const handleScanSms = async () => {
-        if (!smsText.trim()) return;
-        setIsScanningSms(true);
-        setSmsScanError(null);
-        setSmsSuggestions([]);
-        try {
-            const results = await analyzeSmsForReminders(smsText);
-            if (results.length === 0) {
-                setToast({ message: "No actionable reminders found in the text.", type: 'success' });
-            } else {
-                setSmsSuggestions(results.map(r => ({ ...r, tempId: `sms-sug-${Math.random()}` })));
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while scanning.";
-            setSmsScanError(errorMessage);
-            setToast({ message: `Error: ${errorMessage}`, type: 'error' });
-        } finally {
-            setIsScanningSms(false);
-        }
+    const handleToggleExpansion = (reminderId: string) => {
+        setExpandedReminderId(currentId => (currentId === reminderId ? null : reminderId));
     };
-
-    const handleAddSmsSuggestion = async (suggestion: Omit<Reminder, 'id'> & { tempId: string }) => {
-        try {
-            const { tempId, ...reminderData } = suggestion;
-            await addReminder({
-                ...reminderData,
-                source: 'SMS',
-            });
-            setSmsSuggestions(prev => prev.filter(s => s.tempId !== tempId));
-            setToast({ message: 'Reminder added from SMS!', type: 'success' });
-        } catch (err) {
-            setToast({ message: `Failed to add reminder: ${err instanceof Error ? err.message : ''}`, type: 'error' });
-        }
-    };
-    
-    const handleDismissSmsSuggestion = (tempId: string) => {
-        setSmsSuggestions(prev => prev.filter(s => s.tempId !== tempId));
-    };
-
 
     const renderMonthView = () => {
         const year = currentDate.getFullYear();
@@ -344,7 +301,7 @@ const DashboardPage: React.FC = () => {
         const days = [];
         // Add padding for days from the previous month
         for (let i = 0; i < firstDayOfMonth.getDay(); i++) {
-            days.push(<div key={`pad-prev-${i}`} className="border-r border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50"></div>);
+            days.push(<div key={`pad-prev-${i}`} className="border-r border-b border-accent-light dark:border-accent-dark bg-gray-50 dark:bg-slate-800/50"></div>);
         }
 
         // Add days of the current month
@@ -358,7 +315,7 @@ const DashboardPage: React.FC = () => {
             days.push(
                 <div 
                     key={dateKey} 
-                    className={`border-r border-b border-gray-200 dark:border-slate-700 p-2 min-h-[120px] relative group transition-colors cursor-pointer flex flex-col ${isSelected ? 'ring-2 ring-primary/80 bg-primary/10 dark:bg-primary/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                    className={`border-r border-b border-accent-light dark:border-accent-dark p-2 min-h-[120px] relative group transition-colors cursor-pointer flex flex-col ${isSelected ? 'ring-2 ring-primary/80 bg-primary/10 dark:bg-primary/20' : 'hover:bg-subtle-light dark:hover:bg-subtle-dark'}`}
                     onClick={() => setSelectedDate(date)}
                 >
                     <span className={`font-semibold text-sm ${isToday ? 'bg-primary text-white rounded-full flex items-center justify-center w-6 h-6' : ''}`}>{day}</span>
@@ -389,13 +346,13 @@ const DashboardPage: React.FC = () => {
         const totalCells = days.length;
         const remainingCells = (7 - (totalCells % 7)) % 7;
         for (let i = 0; i < remainingCells; i++) {
-            days.push(<div key={`pad-next-${i}`} className="border-r border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50"></div>);
+            days.push(<div key={`pad-next-${i}`} className="border-r border-b border-accent-light dark:border-accent-dark bg-gray-50 dark:bg-slate-800/50"></div>);
         }
 
         return (
              <div className="grid grid-cols-7">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(dayName => (
-                    <div key={dayName} className="text-center font-bold p-2 border-b border-r border-gray-200 dark:border-slate-700 text-sm">{dayName}</div>
+                    <div key={dayName} className="text-center font-bold p-2 border-b border-r border-accent-light dark:border-accent-dark text-sm">{dayName}</div>
                 ))}
                 {days}
             </div>
@@ -420,7 +377,7 @@ const DashboardPage: React.FC = () => {
                     onClose={() => setReminderModalState({ ...reminderModalState, isOpen: false })}
                     onSave={handleSaveReminder}
                     onDelete={(id) => handleDelete(id)}
-                    onComplete={handleComplete}
+                    onComplete={handleStartCompleteAnimation}
                     onSnooze={handleSnooze}
                 />
              )}
@@ -443,17 +400,14 @@ const DashboardPage: React.FC = () => {
             )}
             <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Your entire life, neatly organized. Or at least, the parts you tell us about.</p>
-            
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-slate-700">
-                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-slate-700">
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-accent-dark card-lift">
+                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-accent-dark">
                         <h2 className="text-xl font-semibold">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                         <div className="flex items-center gap-2">
-                            <button onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate } })} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
-                                <Plus size={16} /> <span className="hidden sm:inline">Add Reminder</span>
-                            </button>
                             <button onClick={() => setIsHolidayModalOpen(true)} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
-                                <DownloadCloud size={16} /> <span className="hidden sm:inline">Import</span>
+                                <DownloadCloud size={16} /> <span className="hidden sm:inline">Import Holidays</span>
                             </button>
                             <button onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
                             <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeft/></button>
@@ -463,139 +417,98 @@ const DashboardPage: React.FC = () => {
                     {renderMonthView()}
                 </div>
                 <div className="lg:col-span-1">
-                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 h-full border border-gray-200 dark:border-slate-700">
-                        <h2 className="text-xl font-semibold mb-4 flex items-center">
-                            <Zap size={22} className="mr-2 text-yellow-500"/>
-                            AI Assistant
-                        </h2>
-                        {loadingSuggestions ? (
-                            <div className="flex flex-col justify-center items-center h-48">
-                                <Spinner />
-                                <p className="mt-2 text-sm text-gray-500">Brewing up some brilliant suggestions...</p>
+                    <div className="bg-subtle-light dark:bg-subtle-dark rounded-lg h-full flex flex-col card-lift overflow-hidden">
+                        <div className="p-6 pb-4 flex-shrink-0 border-b border-gray-200 dark:border-accent-dark">
+                            <h2 className="text-xl font-bold">
+                                Agenda for {selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+                            </h2>
+                        </div>
+                        <div className="flex-grow flex flex-col overflow-hidden">
+                            <div className="px-6 pt-4 flex-shrink-0">
+                                <ChatInput onNewReminder={handleNewReminder} isLoading={isLoading} />
                             </div>
-                        ) : (
-                            <>
-                                {dashboardAI.dailyBriefing && (
-                                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/40 rounded-lg border border-blue-200 dark:border-blue-800/60">
-                                        <p className="text-sm text-blue-800 dark:text-blue-200">{dashboardAI.dailyBriefing}</p>
-                                    </div>
-                                )}
-                                <h3 className="font-semibold text-sm mb-2 text-gray-600 dark:text-gray-400">Suggestions for You</h3>
-                                {dashboardAI.suggestions.length > 0 ? (
-                                    <div className="space-y-3">
-                                    {dashboardAI.suggestions.map(sug => (
-                                        <div key={sug.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                                            <div>
-                                                <p className="font-semibold">{sug.title} <span className="text-xs font-normal text-gray-500">on {sug.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}</span></p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sug.description}</p>
-                                            </div>
-                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                                <button onClick={() => handleAddSuggestion(sug)} title="Add Reminder" className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 rounded-full">
-                                                    <PlusCircle size={18}/>
-                                                </button>
-                                                <button onClick={() => handleDismissSuggestion(sug.id)} title="Dismiss" className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
-                                                    <XCircle size={18}/>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                            <div className="overflow-y-auto px-6 pt-4 pb-6 flex-grow">
+                                 {remindersForSelectedDay.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {remindersForSelectedDay.map((reminder) => (
+                                            <ReminderCard
+                                                key={reminder.id}
+                                                reminder={reminder}
+                                                onVendorSelect={handleVendorSelect}
+                                                onEdit={(r) => setReminderModalState({ isOpen: true, mode: 'edit', initialData: r })}
+                                                onDelete={handleDelete}
+                                                onSnooze={handleSnooze}
+                                                onComplete={handleStartCompleteAnimation}
+                                                onShowToast={showToast}
+                                                isNew={reminder.id === newlyAddedId}
+                                                isCompleting={reminder.id === completingId}
+                                                isExpanded={expandedReminderId === reminder.id}
+                                                onToggleExpansion={() => handleToggleExpansion(reminder.id)}
+                                            />
+                                        ))}
                                     </div>
                                 ) : (
-                                    <p className="text-center text-gray-500 py-4 text-sm">No new suggestions at the moment.</p>
+                                    <div className="text-center px-6 rounded-lg border-2 border-dashed border-gray-200 dark:border-accent-dark h-full flex flex-col justify-center items-center">
+                                        <Calendar size={40} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Looks like a free day!</h3>
+                                        <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm max-w-xs">
+                                            Use the AI assistant above to add a new reminder for this day.
+                                        </p>
+                                    </div>
                                 )}
-                            </>
-                        )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-                <ChatInput onNewReminder={handleNewReminder} isLoading={isLoading} />
-            </div>
-
-            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-3">
-                    <MessageSquare className="text-green-500"/>
-                    Import Reminders from SMS
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Copy and paste messages from your SMS app below. Our AI will scan them for potential reminders like appointments or bill payments. Your data is not stored.
-                </p>
-                <textarea
-                    value={smsText}
-                    onChange={(e) => setSmsText(e.target.value)}
-                    placeholder="Paste one or more SMS messages here..."
-                    className="w-full h-32 p-3 border border-gray-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 focus:ring-primary focus:border-primary transition"
-                    disabled={isScanningSms}
-                />
-                <button
-                    onClick={handleScanSms}
-                    className="mt-4 inline-flex items-center justify-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors disabled:bg-primary/60"
-                    disabled={isScanningSms || !smsText.trim()}
-                >
-                    {isScanningSms ? <><Spinner size="5" /> Scanning...</> : <><ScanText size={18}/> Scan SMS for Reminders</>}
-                </button>
-
-                {smsScanError && <p className="mt-4 text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md text-sm">{smsScanError}</p>}
-
-                {smsSuggestions.length > 0 && (
-                    <div className="mt-6 border-t border-gray-200 dark:border-slate-700 pt-4">
-                        <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-3">Found {smsSuggestions.length} potential reminder(s):</h3>
-                        <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                            {smsSuggestions.map(sug => (
-                                <div key={sug.tempId} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg animate-fade-in">
-                                    <div>
-                                        <p className="font-semibold">{sug.title} <span className="text-xs font-normal text-gray-500">on {sug.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}</span></p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sug.description}</p>
-                                    </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={() => handleAddSmsSuggestion(sug)} title="Add Reminder" className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 rounded-full">
-                                            <PlusCircle size={18}/>
-                                        </button>
-                                        <button onClick={() => handleDismissSmsSuggestion(sug.tempId)} title="Dismiss" className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
-                                            <XCircle size={18}/>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+            <div className="my-8">
+                 <div className="bg-gradient-to-br from-blue-50 to-purple-100 dark:from-slate-800 dark:to-slate-900 rounded-lg shadow-sm p-6 card-lift">
+                    <h2 className="text-xl font-semibold mb-4 flex items-center">
+                        <Zap size={22} className="mr-2 text-yellow-500"/>
+                        AI Assistant
+                    </h2>
+                    {loadingSuggestions ? (
+                        <div className="flex flex-col justify-center items-center h-48">
+                            <Spinner />
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-200/80">Brewing up some brilliant suggestions...</p>
                         </div>
-                    </div>
-                )}
-            </div>
-
-            <div>
-                <h2 className="text-2xl font-bold mb-4">
-                    Agenda for {selectedDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </h2>
-                {remindersForSelectedDay.length > 0 ? (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {remindersForSelectedDay.map(reminder => (
-                            <ReminderCard
-                                key={reminder.id}
-                                reminder={reminder}
-                                onVendorSelect={handleVendorSelect}
-                                onEdit={(r) => setReminderModalState({ isOpen: true, mode: 'edit', initialData: r })}
-                                onDelete={handleDelete}
-                                onSnooze={handleSnooze}
-                                onComplete={handleComplete}
-                                onShowToast={showToast}
-                                onAddIngredients={(recipe) => handleAddIngredientsToCart(recipe, reminder)}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-12 px-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border-2 border-dashed border-gray-200 dark:border-slate-700">
-                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Looks like a free day!</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mt-2">Perfect for procrastinating on tomorrow's tasks. Or, you know, adding a new reminder.</p>
-                         <button onClick={() => setReminderModalState({ isOpen: true, mode: 'create', initialData: { date: selectedDate } })} className="mt-4 inline-flex items-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
-                            <Plus size={18}/>
-                            Add Reminder
-                        </button>
-                    </div>
-                )}
+                    ) : (
+                        <>
+                            {dashboardAI.dailyBriefing && (
+                                <div className="mb-4 p-3 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-lg border border-white/30 dark:border-slate-700/60">
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">{dashboardAI.dailyBriefing}</p>
+                                </div>
+                            )}
+                            <h3 className="font-semibold text-sm mb-2 text-gray-600 dark:text-gray-300">Suggestions for You</h3>
+                            {dashboardAI.suggestions.length > 0 ? (
+                                <div className="space-y-3">
+                                {dashboardAI.suggestions.map(sug => (
+                                    <div key={sug.id} className="flex items-center justify-between p-3 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-lg card-lift border border-white/20 dark:border-slate-700/50">
+                                        <div>
+                                            <p className="font-semibold">{sug.title} <span className="text-xs font-normal text-gray-500 dark:text-gray-400">on {sug.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric'})}</span></p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sug.description}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                            <button onClick={() => handleAddSuggestion(sug)} title="Add Reminder" className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 rounded-full">
+                                                <PlusCircle size={18}/>
+                                            </button>
+                                            <button onClick={() => handleDismissSuggestion(sug.id)} title="Dismiss" className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-full">
+                                                <XCircle size={18}/>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-500 dark:text-gray-300 py-4 text-sm">No new suggestions at the moment.</p>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
             
-            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-accent-dark card-lift">
                 <div className="flex flex-col md:flex-row items-center gap-6">
                     <div className="flex-shrink-0 grid grid-cols-4 md:grid-cols-2 gap-4">
                         <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full" title="Google Calendar"><Calendar className="w-6 h-6 text-blue-500" /></div>
@@ -608,9 +521,9 @@ const DashboardPage: React.FC = () => {
                         <p className="text-gray-500 dark:text-gray-400 mb-4">
                             Connect your Google, Outlook, and social media accounts so it can make more friends and find more reminders for you.
                         </p>
-                        <NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
+                        <ReactRouterDOM.NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
                             Connect Accounts
-                        </NavLink>
+                        </ReactRouterDOM.NavLink>
                     </div>
                 </div>
             </div>

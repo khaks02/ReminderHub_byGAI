@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, ConciergeBell } from 'lucide-react';
 import { CartItem, CartItemType, ServiceCartItem, PreparedDishCartItem, VendorProductCartItem } from '../types';
-// FIX: Switched from a namespace import to a direct named import to resolve module resolution errors.
-import { NavLink } from 'react-router-dom';
+// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
+import * as ReactRouterDOM from 'react-router-dom';
 
 const VendorSelector: React.FC<{ vendors: string[]; selectedVendor?: string; onSelect: (vendor: string) => void; }> = ({ vendors, selectedVendor, onSelect }) => {
     if (!vendors || vendors.length === 0) return <p className="text-xs text-gray-500 mt-1">No vendors available.</p>;
@@ -145,9 +145,9 @@ const CartPage: React.FC = () => {
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Thank you for your order!</h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">Your purchase has been completed and you can view the details in your order history.</p>
                 <div className="mt-6">
-                    <NavLink to="/orders" className="bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-dark transition-colors">
+                    <ReactRouterDOM.NavLink to="/orders" className="bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-dark transition-colors">
                         View My Orders
-                    </NavLink>
+                    </ReactRouterDOM.NavLink>
                 </div>
             </div>
         );
@@ -160,7 +160,7 @@ const CartPage: React.FC = () => {
             
             {cart.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 space-y-6">
+                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 space-y-6 card-lift">
                        {cart.map(item => (
                            <div key={item.id} className="flex items-start justify-between border-b border-gray-200 dark:border-slate-700 pb-6 last:border-b-0 last:pb-0">
                                <div className="flex-grow">
@@ -173,7 +173,7 @@ const CartPage: React.FC = () => {
                        ))}
                     </div>
                     <div className="lg:col-span-1">
-                        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 sticky top-24">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 sticky top-24 card-lift">
                             <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
                             <div className="flex justify-between mb-2 text-gray-600 dark:text-gray-400">
                                 <span>Subtotal</span>
@@ -188,7 +188,7 @@ const CartPage: React.FC = () => {
                                 <span>Total</span>
                                 <span>₹{total.toFixed(2)}</span>
                             </div>
-                            <button onClick={handleCheckout} className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition-colors">
+                            <button onClick={handleCheckout} className="w-full bg-primary text-white font-bold py-3 rounded-lg hover:bg-primary-dark transition-colors animate-pulse-glow">
                                 Proceed to Checkout
                             </button>
                              <button onClick={clearCart} className="w-full mt-2 text-sm text-red-500 hover:text-red-700 transition">

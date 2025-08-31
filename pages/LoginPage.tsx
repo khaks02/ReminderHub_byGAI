@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-// FIX: Switched from a namespace import to direct named imports to resolve module resolution errors.
-import { useNavigate, useLocation } from 'react-router-dom';
+// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
+import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
-import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, CheckCircle } from 'lucide-react';
 import Spinner from '../components/Spinner';
 
 const GoogleIcon = () => (
@@ -22,8 +22,8 @@ const FacebookIcon = () => (
 
 const LoginPage: React.FC = () => {
     const { login, signup, loading } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
+    const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
 
     const [isSignUp, setIsSignUp] = useState(false);
     const [fullName, setFullName] = useState('');
@@ -32,7 +32,8 @@ const LoginPage: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const from = location.state?.from?.pathname || "/";
+    const from = location.state?.from?.pathname || "/app/";
+    const approvedTesterEmail = "kshitij.khandelwal@outlook.com";
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -72,9 +73,9 @@ const LoginPage: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-bkg-light dark:bg-bkg-dark p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-primary">ReminderHub AI</h1>
+                    <h1 className="text-4xl font-bold text-primary">myreminder</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2">
-                        {isSignUp ? 'Create your account' : 'Sign in to access your intelligent dashboard.'}
+                        {isSignUp ? 'Create your account' : 'Admin Test Login'}
                     </p>
                 </div>
 
@@ -120,6 +121,11 @@ const LoginPage: React.FC = () => {
                                     disabled={loading}
                                     autoComplete="email"
                                 />
+                                {email.toLowerCase() === approvedTesterEmail && (
+                                     <div className="absolute top-[-2px] right-0 text-xs bg-green-500 text-white font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 animate-fade-in">
+                                         <CheckCircle size={12} /> Admin Test Access
+                                     </div>
+                                )}
                              </div>
                         </div>
                         

@@ -1,6 +1,7 @@
 
 
 
+
 export interface User {
     id: string;
     name: string;
@@ -85,7 +86,7 @@ export interface Recipe {
     description: string;
     ingredients: string[];
     instructions: string[];
-    imageUrl: string;
+    imageUrl?: string;
     isVeg: boolean;
     cuisine: string;
     rating: number;

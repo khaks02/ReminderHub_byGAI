@@ -46,7 +46,6 @@ const generateMockRecipes = (count: number): Recipe[] => {
             description: `A delicious and ${name.split(' ')[0].toLowerCase()} ${cuisine} ${name.split(' ')[2].toLowerCase()} featuring ${name.split(' ')[1].toLowerCase()}. Perfect for a weeknight dinner.`,
             ingredients: shuffleArray([...recipeTemplates.ingredients]).slice(0, getRandomNumber(4, 8)),
             instructions: recipeTemplates.instructions,
-            imageUrl: `https://picsum.photos/seed/${encodeURIComponent(name)}/400/300`,
             isVeg,
             cuisine,
             rating: getRandomNumber(3.8, 5, 1),

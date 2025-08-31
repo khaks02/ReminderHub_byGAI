@@ -19,13 +19,24 @@ const getServiceWorkerRegistration = async (): Promise<ServiceWorkerRegistration
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
     if ('Notification' in window) {
-        // Request permission from the user to show notifications.
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-            console.warn('[NotificationService] Notification permission was not granted.');
+        // If permission has already been denied, do nothing.
+        if (Notification.permission === 'denied') {
+            return false;
         }
-        return permission === 'granted';
+
+        // If permission is in the default state, then request it from the user.
+        if (Notification.permission === 'default') {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                console.warn('[NotificationService] Notification permission was not granted by the user.');
+                return false;
+            }
+        }
+        
+        // If permission is granted (either previously or just now), return true.
+        return true;
     }
+
     console.warn('[NotificationService] This browser does not support desktop notification.');
     return false;
 };

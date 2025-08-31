@@ -48,7 +48,7 @@ const OrdersPage: React.FC = () => {
             {orders.length > 0 ? (
                 <div className="space-y-6">
                     {orders.map(order => (
-                        <div key={order.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden">
+                        <div key={order.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden card-lift">
                             <div className="p-4 bg-slate-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-2">
                                 <div>
                                     <h2 className="font-bold text-lg">Order #{order.id.slice(-6)}</h2>
@@ -61,7 +61,7 @@ const OrdersPage: React.FC = () => {
                                     <p className="font-bold text-lg">₹{order.total.toFixed(2)}</p>
                                 </div>
                             </div>
-                            <div className="p-4">
+                            <div className="p-6">
                                 {order.reminderTitle && (
                                     <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-md text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
                                         <Link size={16} />

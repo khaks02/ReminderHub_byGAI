@@ -121,7 +121,7 @@ const AnalyticsPage: React.FC = () => {
             <p className="text-gray-500 dark:text-gray-400 mb-6">Insights into your reminders and service usage.</p>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+                <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm card-lift">
                     <h2 className="text-xl font-semibold mb-4">Reminder Types Breakdown</h2>
                      <div className="w-full h-[300px]">
                         {reminderData.length > 0 ? (
@@ -137,7 +137,7 @@ const AnalyticsPage: React.FC = () => {
                                         }}
                                     />
                                     <Legend />
-                                    <Bar dataKey="count" fill="hsl(210, 40%, 50%)" name="Total Reminders" />
+                                    <Bar dataKey="count" fill="hsl(210, 80%, 55%)" name="Total Reminders" />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -145,7 +145,7 @@ const AnalyticsPage: React.FC = () => {
                         )}
                     </div>
                 </div>
-                <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+                <div className="p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm card-lift">
                     <h2 className="text-xl font-semibold mb-4">Spending by Service/Vendor</h2>
                     <div className="w-full h-[300px]">
                          {serviceData.length > 0 ? (
@@ -176,9 +176,9 @@ const AnalyticsPage: React.FC = () => {
                     </div>
                 </div>
             </div>
-             <div className="mt-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+             <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-800 dark:to-slate-900 rounded-lg shadow-sm card-lift">
                 <div className="flex justify-between items-start">
-                    <h2 className="text-xl font-semibold mb-4">AI-Powered Insights</h2>
+                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2"><Zap className="text-yellow-500"/>AI-Powered Insights</h2>
                     {!insights && !isInsightsLoading && (
                          <button 
                             onClick={handleGenerateInsights}
@@ -198,7 +198,7 @@ const AnalyticsPage: React.FC = () => {
                 )}
                  {insightsError && <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{insightsError}</p>}
                  {insights && (
-                     <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg prose dark:prose-invert prose-sm max-w-none animate-fade-in">
+                     <div className="p-4 bg-slate-50/50 dark:bg-slate-700/30 rounded-lg prose dark:prose-invert prose-sm max-w-none animate-fade-in">
                         <AiInsightRenderer content={insights} />
                      </div>
                  )}

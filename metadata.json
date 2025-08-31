@@ -1,6 +1,6 @@
 {
-  "name": "ReminderHub AI",
-  "description": "An intelligent calendar-based reminder app. It centralizes events from various calendars, understands reminders via AI, and provides relevant service recommendations for events like birthdays, meetings, or renewals. It also features an AI-powered recipe discovery section.",
+  "name": "myreminder",
+  "description": "A modern, beautiful 'Coming Soon' page for the myreminder AI app. It features a clean design, a countdown to launch, a list of upcoming features, and a newsletter signup form. It also includes a private admin login for testing.",
   "requestFramePermissions": [],
   "prompt": ""
 }

@@ -1,9 +1,6 @@
-
-
-
 import React from 'react';
 import { Recipe } from '../types';
-import { ShoppingBasket, Sandwich, ChefHat, Heart, Share2, Clock, Users, Globe, BarChart3, Thermometer } from 'lucide-react';
+import { ShoppingBasket, Sandwich, ChefHat, Heart, Share2, Clock, BarChart3, Thermometer } from 'lucide-react';
 
 interface RecipeCardProps {
     recipe: Recipe;
@@ -11,9 +8,10 @@ interface RecipeCardProps {
     onShowVendors: (recipe: Recipe, action: 'Buy Ingredients' | 'Order Online' | 'Hire a Chef') => void;
     onToggleSave: (recipe: Recipe) => void;
     isSaved: boolean;
+    index?: number;
 }
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors, onToggleSave, isSaved }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors, onToggleSave, isSaved, index = 0 }) => {
     
     const handleShare = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -33,49 +31,56 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors
     };
 
     const InfoItem = ({ icon, text, title }: { icon: React.ReactNode; text: string | number; title: string }) => (
-        <div className="flex items-center gap-1.5" title={title}>
+        <div className="flex flex-col items-center text-center" title={title}>
             {icon}
-            <span className="text-xs font-medium">{text}</span>
+            <span className="text-xs font-medium mt-1">{text}</span>
         </div>
     );
 
     return (
         <div 
-            className="group flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden transform hover:-translate-y-1 transition-all duration-300 cursor-pointer border border-transparent hover:border-primary"
-            onClick={() => onSelect(recipe)}
+            className="group flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-md transition-all duration-300 border border-gray-200 dark:border-slate-700 card-lift animate-pop-in"
+            style={{ animationDelay: `${index * 50}ms` }}
         >
             <div className="p-4 flex-grow flex flex-col">
                 <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold group-hover:text-primary transition-colors pr-2 flex-1">{recipe.name}</h3>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex-grow pr-2">
+                        <h3 className="text-lg font-bold group-hover:text-primary transition-colors cursor-pointer" onClick={() => onSelect(recipe)}>{recipe.name}</h3>
+                         <span className="mt-1 inline-block px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary-dark dark:bg-primary/30 dark:text-primary-light">
+                            {recipe.cuisine}
+                        </span>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onToggleSave(recipe); }}
-                            className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-red-100 text-red-500 dark:bg-red-900/50' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-red-500'}`}
+                            className={`p-2 rounded-full transition-all duration-200 ${isSaved ? 'text-red-500' : 'text-slate-400 hover:text-red-500'}`}
                             title={isSaved ? "Unsave Recipe" : "Save Recipe"}
                         >
-                            <Heart size={16} fill={isSaved ? 'currentColor' : 'none'} />
+                            <Heart size={18} fill={isSaved ? 'currentColor' : 'none'} />
                         </button>
                          <button 
                             onClick={handleShare}
-                            className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
+                            className="p-2 rounded-full text-slate-400 hover:text-primary transition-colors"
                             title="Share Recipe"
                         >
-                            <Share2 size={16} />
+                            <Share2 size={18} />
                         </button>
                     </div>
                 </div>
-
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 h-10 overflow-hidden text-ellipsis">{recipe.description}</p>
                 
-                <div className="mt-auto grid grid-cols-2 gap-x-4 gap-y-2 text-gray-600 dark:text-gray-300">
-                    <InfoItem icon={<BarChart3 size={14} />} text={recipe.difficulty} title="Difficulty" />
-                    <InfoItem icon={<Thermometer size={14} />} text={`${recipe.calories} kcal`} title="Calories per serving" />
-                    <InfoItem icon={<Clock size={14} />} text={`${recipe.cookTimeInMinutes} min`} title="Cook Time" />
-                    <InfoItem icon={<Globe size={14} />} text={recipe.cuisine} title="Cuisine" />
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 h-10 overflow-hidden text-ellipsis">{recipe.description}</p>
+                
+                <div className="grid grid-cols-3 gap-2 text-center text-gray-600 dark:text-gray-300 mt-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+                    <InfoItem icon={<Clock size={18} />} text={`${recipe.cookTimeInMinutes} min`} title="Cook Time" />
+                    <InfoItem icon={<BarChart3 size={18} />} text={recipe.difficulty} title="Difficulty" />
+                    <InfoItem icon={<Thermometer size={18} />} text={`${recipe.calories} kcal`} title="Calories" />
                 </div>
+                 <button onClick={() => onSelect(recipe)} className="mt-4 w-full text-center bg-primary text-white font-semibold py-2.5 rounded-lg hover:bg-primary-dark transition-colors">
+                    View Recipe
+                </button>
             </div>
-            
-            <div className="p-2 mt-auto border-t border-gray-100 dark:border-slate-700/50">
+
+            <div className="p-2 mt-auto border-t border-gray-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50">
                 <div className="flex justify-around text-center">
                     <button 
                         onClick={(e) => { e.stopPropagation(); onShowVendors(recipe, 'Buy Ingredients'); }}

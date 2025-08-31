@@ -65,8 +65,9 @@ const RecipesPage: React.FC = () => {
     const [drinkPairing, setDrinkPairing] = useState<{ loading: boolean, text: string }>({ loading: false, text: '' });
     const [vendorModal, setVendorModal] = useState<{ isOpen: boolean; vendorSuggestion: VendorSuggestion | null; }>({ isOpen: false, vendorSuggestion: null });
     
-    // State for sticky header visibility
+    // State for sticky header visibility & search tabs
     const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+    const [activeSearchTab, setActiveSearchTab] = useState('name');
     const lastScrollTop = useRef(0);
 
     useEffect(() => {
@@ -277,56 +278,63 @@ const RecipesPage: React.FC = () => {
                 />
             )}
 
-            <div className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-10 border-b border-gray-200 dark:border-slate-700 transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+            <div className={`bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-10 border-b border-gray-200 dark:border-accent-dark transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
                 <div className="container mx-auto p-4">
-                    <div className="flex flex-col gap-4">
-                        <form onSubmit={handleGenerateByIngredients} className="space-y-2">
-                            <label htmlFor="ingredients-input" className="flex items-center gap-2 font-semibold">
-                                <Sparkles className="text-primary"/>
-                                Generate from Ingredients
-                            </label>
-                            <div className="flex flex-col md:flex-row items-center gap-2">
-                                <textarea
-                                    id="ingredients-input"
-                                    value={ingredientsQuery}
-                                    onChange={(e) => setIngredientsQuery(e.target.value)}
-                                    placeholder="e.g., chicken, tomatoes, onion, garlic..."
-                                    className="w-full h-16 md:h-auto md:flex-grow p-2 border border-gray-300 dark:border-slate-700 rounded-md dark:bg-slate-900"
-                                />
-                                <button type="submit" className="w-full md:w-auto bg-primary text-white font-bold py-2 px-6 rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center gap-2" disabled={isGeneratingByIngredients || !ingredientsQuery}>
-                                    {isGeneratingByIngredients ? <Spinner size="5"/> : 'Generate'}
-                                </button>
-                            </div>
-                        </form>
-
-                        <div className="relative flex items-center">
-                            <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
-                            <span className="flex-shrink mx-4 text-xs font-semibold text-gray-400">OR</span>
-                            <div className="flex-grow border-t border-gray-200 dark:border-slate-700"></div>
-                        </div>
-
-                        <form onSubmit={handleSearch} className="flex flex-col md:flex-row items-center gap-2">
-                            <div className="relative flex-grow w-full">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                                <input
-                                    type="text"
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    placeholder="Search for any dish, e.g., 'sushi', 'pasta'"
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:ring-primary focus:border-primary dark:bg-slate-900"
-                                />
-                            </div>
-                            <div className="flex items-center gap-4 w-full md:w-auto">
-                                <label className="flex items-center cursor-pointer flex-grow justify-center">
-                                    <input type="checkbox" checked={isVeg} onChange={() => updatePreferences({ recipe_vegetarian_only: !isVeg })} className="sr-only peer" />
-                                    <div className="relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                                    <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Veg Only</span>
-                                </label>
+                    <div className="flex border-b border-gray-200 dark:border-slate-700">
+                        <button
+                            onClick={() => setActiveSearchTab('name')}
+                            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeSearchTab === 'name' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Search Recipes
+                        </button>
+                        <button
+                            onClick={() => setActiveSearchTab('ingredients')}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeSearchTab === 'ingredients' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <Sparkles size={16}/> Generate by Ingredients
+                        </button>
+                    </div>
+                     <div className="pt-4">
+                        {activeSearchTab === 'name' ? (
+                            <form onSubmit={handleSearch} className="flex flex-col md:flex-row items-center gap-2 animate-fade-in">
+                                <div className="relative flex-grow w-full">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                                    <input
+                                        type="text"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        placeholder="Search for any dish, e.g., 'sushi', 'pasta'"
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:ring-primary focus:border-primary dark:bg-slate-900"
+                                    />
+                                </div>
                                 <button type="submit" className="w-full md:w-auto bg-slate-700 dark:bg-slate-600 text-white font-bold py-2 px-6 rounded-md hover:bg-slate-800 dark:hover:bg-slate-500 transition-colors" disabled={loadingState.global || !query}>
                                     Search
                                 </button>
-                            </div>
-                        </form>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleGenerateByIngredients} className="flex flex-col md:flex-row items-center gap-2 animate-fade-in">
+                                <div className="relative flex-grow w-full">
+                                    <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                                    <input
+                                        type="text"
+                                        value={ingredientsQuery}
+                                        onChange={(e) => setIngredientsQuery(e.target.value)}
+                                        placeholder="List ingredients, e.g., cucumber, dal, paneer"
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:ring-primary focus:border-primary dark:bg-slate-900"
+                                    />
+                                </div>
+                                <button type="submit" className="w-full md:w-auto bg-primary text-white font-bold py-2 px-6 rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center gap-2" disabled={isGeneratingByIngredients || !ingredientsQuery}>
+                                    {isGeneratingByIngredients ? <Spinner size="5"/> : 'Generate'}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                     <div className="flex justify-end pt-3">
+                        <label className="flex items-center cursor-pointer">
+                            <input type="checkbox" checked={isVeg} onChange={() => updatePreferences({ recipe_vegetarian_only: !isVeg })} className="sr-only peer" />
+                            <div className="relative w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Veg Only</span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -360,7 +368,7 @@ const RecipesPage: React.FC = () => {
                                 <h2 className="text-2xl font-bold mb-4">Search Results for "{query}"</h2>
                                  {searchResults.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                        {searchResults.map(recipe => (
+                                        {searchResults.map((recipe, index) => (
                                             <RecipeCard 
                                                 key={recipe.id} 
                                                 recipe={recipe} 
@@ -368,6 +376,7 @@ const RecipesPage: React.FC = () => {
                                                 onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
                                                 onToggleSave={handleToggleSave}
                                                 isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                                                index={index}
                                             />
                                         ))}
                                     </div>
@@ -384,7 +393,7 @@ const RecipesPage: React.FC = () => {
                                 <h2 className="text-2xl font-bold mb-4">Recipes from your ingredients</h2>
                                 {ingredientRecipes.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                        {ingredientRecipes.map(recipe => (
+                                        {ingredientRecipes.map((recipe, index) => (
                                             <RecipeCard 
                                                 key={recipe.id} 
                                                 recipe={recipe} 
@@ -392,6 +401,7 @@ const RecipesPage: React.FC = () => {
                                                 onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
                                                 onToggleSave={handleToggleSave}
                                                 isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                                                index={index}
                                             />
                                         ))}
                                     </div>
@@ -420,7 +430,7 @@ const RecipesPage: React.FC = () => {
                                             </button>
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                            {recipes.map(recipe => (
+                                            {recipes.map((recipe, index) => (
                                                 <RecipeCard 
                                                     key={recipe.id} 
                                                     recipe={recipe} 
@@ -428,6 +438,7 @@ const RecipesPage: React.FC = () => {
                                                     onShowVendors={(recipe, action) => handleQuickAddToCart(recipe, action)}
                                                     onToggleSave={handleToggleSave}
                                                     isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                                                    index={index}
                                                 />
                                             ))}
                                         </div>

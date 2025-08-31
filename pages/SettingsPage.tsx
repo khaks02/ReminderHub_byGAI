@@ -79,7 +79,7 @@ const SettingsPage: React.FC = () => {
             <h1 className="text-3xl font-bold mb-2">Settings</h1>
             <p className="text-gray-500 dark:text-gray-400 mb-8">Manage your connected accounts and preferences.</p>
 
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8 card-lift">
                 <h2 className="text-xl font-semibold mb-4">Personalization</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Tailor the app experience to your personal tastes.</p>
                 <div className="space-y-4">
@@ -93,7 +93,7 @@ const SettingsPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8 card-lift">
                 <h2 className="text-xl font-semibold mb-4">Connect Calendars &amp; Events</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Sync events from your favorite services for a unified calendar view.</p>
                 <div className="space-y-4">
@@ -124,7 +124,7 @@ const SettingsPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-8 card-lift">
                 <h2 className="text-xl font-semibold mb-4">Connect Other Sources for AI Suggestions</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Allow our AI to ethically scan for potential reminders from your emails and messages for things like bills, receipts, and recurring deliveries.</p>
                 <div className="space-y-4">
@@ -149,7 +149,7 @@ const SettingsPage: React.FC = () => {
                 </div>
             </div>
 
-             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 card-lift">
                 <h2 className="text-xl font-semibold mb-4">API Keys</h2>
                  <p className="text-sm text-gray-500 dark:text-gray-400">API keys are managed via secure environment variables and are not user-configurable here.</p>
             </div>
