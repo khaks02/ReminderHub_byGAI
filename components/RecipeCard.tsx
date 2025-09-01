@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Recipe } from '../types';
-import { ShoppingBasket, Sandwich, ChefHat, Heart, Share2, Clock, BarChart3, Thermometer } from 'lucide-react';
+import { getDrinkPairing } from '../services/geminiService';
+import { ShoppingBasket, Sandwich, ChefHat, Heart, Share2, Clock, BarChart3, Thermometer, Wine, BookOpen } from 'lucide-react';
 
 interface RecipeCardProps {
     recipe: Recipe;
@@ -13,6 +14,23 @@ interface RecipeCardProps {
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors, onToggleSave, isSaved, index = 0 }) => {
     
+    const [drinkPairing, setDrinkPairing] = useState({ loading: true, text: '' });
+
+    useEffect(() => {
+        let isMounted = true;
+        getDrinkPairing(recipe.name, recipe.cuisine).then(pairingText => {
+            if (isMounted) {
+                setDrinkPairing({ loading: false, text: pairingText });
+            }
+        }).catch(err => {
+            console.error("Failed to get drink pairing for card:", err);
+            if(isMounted) {
+                setDrinkPairing({ loading: false, text: 'Could not fetch pairing.' });
+            }
+        });
+        return () => { isMounted = false; };
+    }, [recipe.name, recipe.cuisine]);
+
     const handleShare = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (navigator.share) {
@@ -46,9 +64,12 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors
                 <div className="flex justify-between items-start mb-2">
                     <div className="flex-grow pr-2">
                         <h3 className="text-lg font-bold group-hover:text-primary transition-colors cursor-pointer" onClick={() => onSelect(recipe)}>{recipe.name}</h3>
-                         <span className="mt-1 inline-block px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary-dark dark:bg-primary/30 dark:text-primary-light">
-                            {recipe.cuisine}
-                        </span>
+                         <div className="flex items-center gap-2 mt-1">
+                             <span className={`w-2.5 h-2.5 rounded-full ${recipe.isVeg ? 'bg-green-500' : 'bg-red-500'}`} title={recipe.isVeg ? 'Vegetarian' : 'Non-Vegetarian'}></span>
+                             <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary-dark dark:bg-primary/30 dark:text-primary-light">
+                                {recipe.cuisine}
+                            </span>
+                        </div>
                     </div>
                     <div className="flex-shrink-0 flex items-center">
                         <button 
@@ -75,16 +96,27 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors
                     <InfoItem icon={<BarChart3 size={18} />} text={recipe.difficulty} title="Difficulty" />
                     <InfoItem icon={<Thermometer size={18} />} text={`${recipe.calories} kcal`} title="Calories" />
                 </div>
-                 <button onClick={() => onSelect(recipe)} className="mt-4 w-full text-center bg-primary text-white font-semibold py-2.5 rounded-lg hover:bg-primary-dark transition-colors">
-                    View Recipe
-                </button>
+                
+                <div className="mt-auto pt-3 border-t border-gray-100 dark:border-slate-700 min-h-[50px]">
+                    <div className="flex items-start gap-2 text-sm text-indigo-700 dark:text-indigo-300">
+                        <Wine size={20} className="flex-shrink-0 mt-0.5 text-indigo-500" />
+                        {drinkPairing.loading ? (
+                             <div className="w-full space-y-1.5 pt-1">
+                                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full w-5/6 animate-pulse"></div>
+                                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full w-4/6 animate-pulse"></div>
+                            </div>
+                        ) : (
+                            <p className="text-xs">{drinkPairing.text}</p>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="p-2 mt-auto border-t border-gray-100 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50">
                 <div className="flex justify-around text-center">
                     <button 
                         onClick={(e) => { e.stopPropagation(); onShowVendors(recipe, 'Buy Ingredients'); }}
-                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/3"
+                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/4"
                         title="Buy Ingredients"
                     >
                         <ShoppingBasket size={20} className="text-green-500"/>
@@ -92,7 +124,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors
                     </button>
                     <button 
                          onClick={(e) => { e.stopPropagation(); onShowVendors(recipe, 'Order Online'); }}
-                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/3"
+                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/4"
                         title="Order Online"
                     >
                         <Sandwich size={20} className="text-orange-500"/>
@@ -100,11 +132,19 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSelect, onShowVendors
                     </button>
                     <button 
                         onClick={(e) => { e.stopPropagation(); onShowVendors(recipe, 'Hire a Chef'); }}
-                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/3"
+                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/4"
                         title="Hire a Chef"
                     >
                         <ChefHat size={20} className="text-indigo-500"/>
                         <span className="text-xs mt-1 font-medium text-gray-700 dark:text-gray-300">Hire Chef</span>
+                    </button>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); onSelect(recipe); }}
+                        className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors w-1/4"
+                        title="View Recipe"
+                    >
+                        <BookOpen size={20} className="text-primary"/>
+                        <span className="text-xs mt-1 font-medium text-gray-700 dark:text-gray-300">View</span>
                     </button>
                 </div>
             </div>
