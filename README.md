@@ -51,9 +51,10 @@ You need to have an account with Supabase and Google AI Studio to get the requir
    SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
    API_KEY=YOUR_GEMINI_API_KEY
    ```
+   *Note: If you run the app without a `.env` file, it will automatically launch in a fully-featured **mock mode** for demonstration purposes.*
 
 3. **Run the application:**
-   - This project is set up as a static site and can be served with any simple HTTP server. A common choice is `serve`.
+   - This project is a static site and can be served with any simple HTTP server. A common choice is `serve`.
    - If you don't have `serve`, install it globally:
      ```bash
      npm install -g serve
@@ -86,7 +87,7 @@ This application is configured for easy deployment to **Firebase Hosting**.
    ```
    - Select an existing Firebase project or create a new one.
    - When asked for your public directory, enter `.` (a single dot for the root directory).
-   - Configure as a single-page app by answering `Yes` to rewrite all URLs to `/index.html`. This is already configured in the provided `firebase.json`, so you can confirm the settings.
+   - Configure as a single-page app by answering `Yes` to rewrite all URLs to `/index.html`. The included `firebase.json` already handles this.
 
 4. **Deploy the application:**
    ```bash
