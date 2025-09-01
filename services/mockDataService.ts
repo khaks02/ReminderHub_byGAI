@@ -1,7 +1,9 @@
 
 import { Reminder, Recipe, Order, CartItem, UserPreferences, DailyRecommendationResponse, ActivityRecommendation, VendorSuggestion, ReminderType, CartItemType } from '../types';
-import { MOCK_RECIPES } from './mock-data/recipes';
-import { MOCK_REMINDERS } from './mock-data/reminders';
+// FIX: Corrected import path from 'mock-data' to 'mockData' to point to the correct file with content.
+import { MOCK_RECIPES } from './mockData/recipes';
+// FIX: Corrected import path from 'mock-data' to 'mockData' to point to the correct file with content.
+import { MOCK_REMINDERS } from './mockData/reminders';
 
 const MOCK_USER_ID = 'mock-user-123';
 
