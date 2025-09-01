@@ -1,23 +1,24 @@
 
+
 import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
 const Breadcrumb: React.FC = () => {
     const location = ReactRouterDOM.useLocation();
-    const pathnames = location.pathname.split('/').filter((x) => x && x !== 'app');
+    const pathnames = location.pathname.split('/').filter((x) => x);
 
     return (
         <nav className="flex items-center text-sm text-gray-500 dark:text-gray-400" aria-label="Breadcrumb">
             <ol className="inline-flex items-center space-x-1 md:space-x-2">
                 <li className="inline-flex items-center">
-                    <ReactRouterDOM.Link to="/app" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
+                    <ReactRouterDOM.Link to="/" className="inline-flex items-center hover:text-primary dark:hover:text-primary-light transition-colors">
                         <Home className="w-4 h-4 mr-2" />
                         Dashboard
                     </ReactRouterDOM.Link>
                 </li>
                 {pathnames.map((value, index) => {
-                    const to = `/app/${pathnames.slice(0, index + 1).join('/')}`;
+                    const to = `/${pathnames.slice(0, index + 1).join('/')}`;
                     const isLast = index === pathnames.length - 1;
                     
                     const nameMapping: { [key: string]: string } = {

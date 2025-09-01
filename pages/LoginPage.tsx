@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
@@ -32,7 +33,7 @@ const LoginPage: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const from = location.state?.from?.pathname || "/app/";
+    const from = location.state?.from?.pathname || "/";
     const approvedTesterEmail = "kshitij.khandelwal@outlook.com";
 
     const handleSubmit = async (e: React.FormEvent) => {

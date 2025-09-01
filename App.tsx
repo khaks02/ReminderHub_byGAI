@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
@@ -10,7 +11,6 @@ import Breadcrumb from './components/Breadcrumb';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import DashboardPage from './pages/DashboardPage';
-import ComingSoonPage from './pages/ComingSoonPage';
 import RecipesPage from './pages/RecipesPage';
 import SettingsPage from './pages/SettingsPage';
 import CartPage from './pages/CartPage';
@@ -62,7 +62,7 @@ const BottomNavItem = ({ to, icon, children }: NavItemProps) => (
 const HeaderTitle = () => {
     const location = ReactRouterDOM.useLocation();
     const pathSegments = location.pathname.split('/').filter(Boolean);
-    const mainPathSegment = pathSegments[0] === 'app' ? (pathSegments[1] || 'dashboard') : 'dashboard';
+    const mainPathSegment = pathSegments[0] || 'dashboard';
     
     const titleMapping: { [key: string]: string } = {
         dashboard: "Dashboard",
@@ -145,9 +145,9 @@ const MainAppLayout = () => {
                     <div className="hidden md:flex items-center gap-6">
                         <h1 className="text-2xl font-bold text-primary">myreminder</h1>
                         <nav className="flex items-center gap-2">
-                            <HeaderNavItem to="/app">Dashboard</HeaderNavItem>
-                            <HeaderNavItem to="/app/recipes">Today's Recipes</HeaderNavItem>
-                            <HeaderNavItem to="/app/orders">My Orders</HeaderNavItem>
+                            <HeaderNavItem to="/">Dashboard</HeaderNavItem>
+                            <HeaderNavItem to="/recipes">Today's Recipes</HeaderNavItem>
+                            <HeaderNavItem to="/orders">My Orders</HeaderNavItem>
                         </nav>
                     </div>
                      {/* Mobile View: Page Title */}
@@ -157,7 +157,7 @@ const MainAppLayout = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    <ReactRouterDOM.NavLink to="/app/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
+                    <ReactRouterDOM.NavLink to="/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
                         <ShoppingCart />
                         {cartCount > 0 && (
                             <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
@@ -178,21 +178,21 @@ const MainAppLayout = () => {
                         {isUserMenuOpen && (
                              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-md shadow-lg z-20 border border-gray-200 dark:border-slate-700 py-1">
                                 <ReactRouterDOM.NavLink 
-                                    to="/app/profile" 
+                                    to="/profile" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     <User size={16}/> My Profile
                                 </ReactRouterDOM.NavLink>
                                  <ReactRouterDOM.NavLink 
-                                    to="/app/analytics" 
+                                    to="/analytics" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     <BarChart2 size={16}/> Analytics
                                 </ReactRouterDOM.NavLink>
                                  <ReactRouterDOM.NavLink 
-                                    to="/app/settings" 
+                                    to="/settings" 
                                     onClick={() => setIsUserMenuOpen(false)}
                                     className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                                 >
@@ -229,15 +229,15 @@ const MainAppLayout = () => {
                 <ReactRouterDOM.Route path="/orders" element={<OrdersPage />} />
                 <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
                 <ReactRouterDOM.Route path="/analytics" element={<AnalyticsPage />} />
-                <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/app" replace />} />
+                <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/" replace />} />
               </ReactRouterDOM.Routes>
             </main>
         </div>
         
         {/* Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-accent-dark flex justify-around items-center shadow-[-2px_0px_10px_rgba(0,0,0,0.1)] p-1 gap-1">
-            <BottomNavItem to="/app" icon={<Home size={24} />}>Dashboard</BottomNavItem>
-            <BottomNavItem to="/app/recipes" icon={<Utensils size={24} />}>Recipes</BottomNavItem>
+            <BottomNavItem to="/" icon={<Home size={24} />}>Dashboard</BottomNavItem>
+            <BottomNavItem to="/recipes" icon={<Utensils size={24} />}>Recipes</BottomNavItem>
         </nav>
       </>
   );
@@ -256,10 +256,9 @@ const AppRoutes = () => {
     
     return (
         <ReactRouterDOM.Routes>
-            <ReactRouterDOM.Route path="/" element={<ComingSoonPage />} />
             <ReactRouterDOM.Route path="/admin-login" element={<LoginPage />} />
             <ReactRouterDOM.Route 
-                path="/app/*"
+                path="/*"
                 element={
                     <ProtectedRoute>
                         <AppProvider>

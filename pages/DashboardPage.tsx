@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
@@ -519,7 +520,7 @@ const DashboardPage: React.FC = () => {
                         <p className="text-gray-500 dark:text-gray-400 mb-4">
                             Connect your Google, Outlook, and social media accounts so it can make more friends and find more reminders for you.
                         </p>
-                        <ReactRouterDOM.NavLink to="/app/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
+                        <ReactRouterDOM.NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
                             Connect Accounts
                         </ReactRouterDOM.NavLink>
                     </div>
