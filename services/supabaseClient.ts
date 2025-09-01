@@ -1,7 +1,7 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, USE_MOCK_DATA } from '../config';
 
-// FIX: Add type definitions for the database schema to provide type safety to the Supabase client.
 export type Json =
   | string
   | number
@@ -177,12 +177,10 @@ if (!USE_MOCK_DATA) {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
         throw new Error("Supabase URL and Anon Key must be provided in environment variables for live data mode.");
     }
-    // FIX: Provide the Database type to createClient for full type safety.
     supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 // Create a single, shared Supabase client for interacting with your database.
 // The type assertion is safe because the Supabase client is only ever used in parts of the code
 // that are guarded by a `!USE_MOCK_DATA` check, ensuring it is never null when accessed.
-// FIX: Update the type assertion to use the new Database type.
 export const supabase = supabaseInstance as ReturnType<typeof createClient<Database>>;

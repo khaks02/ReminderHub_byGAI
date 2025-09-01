@@ -1,5 +1,5 @@
+
 import React, { useState } from 'react';
-// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
 import { Mail, Lock, Eye, EyeOff, User, CheckCircle } from 'lucide-react';

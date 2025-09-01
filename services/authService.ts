@@ -1,8 +1,10 @@
+
+
 import { User } from '../types';
 import { supabase } from './supabaseClient';
-// FIX: Auth-related types are imported from `@supabase/gotrue-js` to resolve export errors.
 // The `AuthSubscription` type is aliased as `Subscription` for consistency.
-import type { User as SupabaseUser, Provider, AuthResponse, AuthSubscription as Subscription } from '@supabase/gotrue-js';
+// FIX: Import auth-related types from '@supabase/supabase-js' instead of the outdated '@supabase/gotrue-js' to resolve type mismatches.
+import type { User as SupabaseUser, Provider, AuthResponse, Subscription } from '@supabase/supabase-js';
 
 
 // Helper to map the Supabase user object to our application's User type.

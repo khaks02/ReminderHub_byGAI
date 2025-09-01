@@ -1,6 +1,7 @@
+
 import { Reminder, Recipe, Order, CartItem, UserPreferences, DailyRecommendationResponse, ActivityRecommendation, VendorSuggestion, ReminderType, CartItemType } from '../types';
-import { MOCK_RECIPES } from './mockData/recipes';
-import { MOCK_REMINDERS } from './mockData/reminders';
+import { MOCK_RECIPES } from './mock-data/recipes';
+import { MOCK_REMINDERS } from './mock-data/reminders';
 
 const MOCK_USER_ID = 'mock-user-123';
 
@@ -88,7 +89,6 @@ class MockDataService {
         
         const filteredRecipes = this.recipes.filter(r => (isVeg ? r.isVeg : true));
         
-        // FIX: Explicitly convert the generated string to a number before multiplication to resolve TypeScript error.
         const seededRandom = (max: number) => Math.floor(Number('0.' + Math.sin(seed).toString().substr(15)) * max);
         
         const shuffle = (array: Recipe[]) => {
@@ -132,7 +132,6 @@ class MockDataService {
     }
     getOrders = () => this.orders.sort((a,b) => b.date.getTime() - a.date.getTime());
     checkout = () => {
-        // FIX: Replaced buggy reduce logic with the correct implementation from useAppContext to resolve type errors and accurately calculate totals.
          const total = this.cart.reduce((acc, item) => {
             let itemPrice = 0;
             switch (item.type) {

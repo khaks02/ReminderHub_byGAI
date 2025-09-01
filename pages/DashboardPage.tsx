@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
@@ -10,7 +11,6 @@ import VendorModal from '../components/VendorModal';
 import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion, Recipe, IngredientsCartItem } from '../types';
 import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
-// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
 import * as ReactRouterDOM from 'react-router-dom';
 import Spinner from '../components/Spinner';
 
@@ -249,11 +249,9 @@ const DashboardPage: React.FC = () => {
 
     const handleAddSuggestion = async (suggestion: any) => {
         try {
-            // FIX: Destructure the temporary client-side 'id' and pass only the valid reminder data.
             const { id, ...reminderData } = suggestion;
             await addReminder(reminderData);
             
-            // FIX: Use the unique temporary id to filter the suggestion from the UI.
             setDashboardAI(prev => ({ ...prev, suggestions: prev.suggestions.filter(s => s.id !== id) }));
             setToast({ message: 'Reminder added from suggestion!', type: 'success' });
         } catch (err) {

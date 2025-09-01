@@ -1,5 +1,5 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
 import * as ReactRouterDOM from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
@@ -86,7 +86,6 @@ const MainAppLayout = () => {
   const { logout, currentUser } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  // FIX: Use the hook directly from the import.
   const navigate = ReactRouterDOM.useNavigate();
   
   const [showOnboarding, setShowOnboarding] = useState(false);

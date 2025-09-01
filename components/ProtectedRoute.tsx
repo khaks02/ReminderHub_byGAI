@@ -1,5 +1,5 @@
+
 import React from 'react';
-// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
 

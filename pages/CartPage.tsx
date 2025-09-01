@@ -1,8 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, ConciergeBell } from 'lucide-react';
 import { CartItem, CartItemType, ServiceCartItem, PreparedDishCartItem, VendorProductCartItem } from '../types';
-// FIX: Switched to a namespace import for react-router-dom to resolve module resolution errors.
 import * as ReactRouterDOM from 'react-router-dom';
 
 const VendorSelector: React.FC<{ vendors: string[]; selectedVendor?: string; onSelect: (vendor: string) => void; }> = ({ vendors, selectedVendor, onSelect }) => {
