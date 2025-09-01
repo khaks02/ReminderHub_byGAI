@@ -1,6 +1,6 @@
 {
   "name": "myreminder",
-  "description": "A modern, beautiful 'Coming Soon' page for the myreminder AI app. It features a clean design, a countdown to launch, a list of upcoming features, and a newsletter signup form. It also includes a private admin login for testing.",
+  "description": "A personal AI assistant for reminders, recipes, and services. Features a public 'Coming Soon' page and a private, feature-rich application for registered users.",
   "requestFramePermissions": [],
   "prompt": ""
 }

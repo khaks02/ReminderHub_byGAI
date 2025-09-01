@@ -69,7 +69,7 @@ const ProfilePage: React.FC = () => {
     };
 
     const handleSelectRecipe = (recipe: Recipe) => {
-        navigate('/recipes');
+        navigate('/app/recipes');
     };
 
     const handleToggleSave = (recipe: Recipe) => {
@@ -200,7 +200,7 @@ const ProfilePage: React.FC = () => {
                                 <Heart size={40} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
                                 <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">No Saved Recipes Yet</h3>
                                 <p className="text-gray-500 dark:text-gray-400 mt-2">Explore our recipes and save your favorites to see them here!</p>
-                                <button onClick={() => navigate('/recipes')} className="mt-4 inline-flex items-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
+                                <button onClick={() => navigate('/app/recipes')} className="mt-4 inline-flex items-center gap-2 bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
                                     <Utensils size={18}/>
                                     Find Recipes
                                 </button>
@@ -238,7 +238,7 @@ const ProfilePage: React.FC = () => {
                         </div>
                         <div className="mt-4 text-center p-3 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
                              <p className="text-sm text-gray-600 dark:text-gray-400">Get smarter reminders by connecting more sources.</p>
-                             <ReactRouterDOM.Link to="/settings" className="text-sm font-bold text-primary hover:underline mt-1 inline-block">
+                             <ReactRouterDOM.Link to="/app/settings" className="text-sm font-bold text-primary hover:underline mt-1 inline-block">
                                 Connect Accounts
                              </ReactRouterDOM.Link>
                          </div>
