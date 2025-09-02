@@ -1,6 +1,5 @@
-
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, USE_MOCK_DATA } from '../config';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 
 export type Json =
   | string
@@ -170,17 +169,13 @@ export interface Database {
   }
 }
 
-let supabaseInstance = null;
-
-// Only initialize Supabase if we are not in mock data mode.
-if (!USE_MOCK_DATA) {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        throw new Error("Supabase URL and Anon Key must be provided in environment variables for live data mode.");
-    }
-    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
+// This prevents the app from crashing when Supabase credentials are not set.
+// The logic in the context providers ensures that this null client is never
+// actually used when in mock mode.
+const shouldCreateClient = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
 
 // Create a single, shared Supabase client for interacting with your database.
-// The type assertion is safe because the Supabase client is only ever used in parts of the code
-// that are guarded by a `!USE_MOCK_DATA` check, ensuring it is never null when accessed.
-export const supabase = supabaseInstance as ReturnType<typeof createClient<Database>>;
+// FIX: Corrected the type of the Supabase client to be explicitly nullable (`SupabaseClient<Database> | null`) and removed the `as any` cast. This allows TypeScript to correctly infer types for Supabase queries, resolving numerous 'not assignable to type never' errors throughout the application where the client is used.
+export const supabase: SupabaseClient<Database> | null = shouldCreateClient
+  ? createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;

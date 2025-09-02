@@ -1,171 +1,159 @@
+import { User, Reminder, Recipe, ActivityRecommendation, DailyRecommendationResponse } from '../types';
+import { mockReminders } from './mockData/reminders';
+import { mockRecipes } from './mockData/recipes';
 
-import { Reminder, Recipe, Order, CartItem, UserPreferences, DailyRecommendationResponse, ActivityRecommendation, VendorSuggestion, ReminderType, CartItemType } from '../types';
-// FIX: Corrected import path from 'mock-data' to 'mockData' to point to the correct file with content.
-import { MOCK_RECIPES } from './mockData/recipes';
-// FIX: Corrected import path from 'mock-data' to 'mockData' to point to the correct file with content.
-import { MOCK_REMINDERS } from './mockData/reminders';
+// --- In-memory data store ---
+let reminders: Reminder[] = [...mockReminders];
+let recipes: Recipe[] = [...mockRecipes];
+let cart: any[] = [];
+let orders: any[] = [];
+let savedRecipes: Recipe[] = [];
+let preferences = { recipe_vegetarian_only: false, has_completed_tutorial: false };
+let reminderTypes = ['Work', 'Health', 'Bill Payment', 'Birthday', 'Social'];
 
-const MOCK_USER_ID = 'mock-user-123';
+// --- Auth ---
+export const getMockUser = (): User => ({
+    id: 'mock-user-123',
+    name: 'Demo User',
+    email: 'demo@example.com',
+    avatarUrl: `https://api.dicebear.com/8.x/initials/svg?seed=Demo%20User`
+});
 
-class MockDataService {
-    private static instance: MockDataService;
-
-    public reminders: Reminder[] = [];
-    public recipes: Recipe[] = [];
-    public orders: Order[] = [];
-    public cart: CartItem[] = [];
-    public reminderTypes: ReminderType[] = [];
-    public savedRecipes: Recipe[] = [];
-    public preferences: UserPreferences = {
-        user_id: MOCK_USER_ID,
-        recipe_vegetarian_only: false,
-        has_completed_tutorial: true,
+// --- Reminders ---
+export const getReminders = () => reminders;
+export const addReminder = (reminder: Omit<Reminder, 'id' | 'user_id'>): Reminder => {
+    const newReminder: Reminder = {
+        ...reminder,
+        id: `mock-${Date.now()}`,
+        user_id: 'mock-user-123',
     };
-
-    private constructor() {
-        this.recipes = MOCK_RECIPES;
-        this.reminders = MOCK_REMINDERS.map(r => ({ ...r, date: new Date(r.date) }));
-
-        // Extract unique reminder types
-        const types = new Set<string>();
-        this.reminders.forEach(r => types.add(r.type));
-        this.reminderTypes = Array.from(types).sort();
-        
-        // Pre-save some recipes
-        this.savedRecipes = this.recipes.slice(0, 5);
-    }
-
-    public static getInstance(): MockDataService {
-        if (!MockDataService.instance) {
-            MockDataService.instance = new MockDataService();
+    reminders.push(newReminder);
+    return newReminder;
+};
+export const deleteReminder = (id: string) => {
+    reminders = reminders.filter(r => r.id !== id);
+};
+export const updateReminder = (id: string, updates: Partial<Reminder>): Reminder => {
+    let updatedReminder: Reminder | undefined;
+    reminders = reminders.map(r => {
+        if (r.id === id) {
+            updatedReminder = { ...r, ...updates };
+            return updatedReminder;
         }
-        return MockDataService.instance;
-    }
+        return r;
+    });
+    return updatedReminder!;
+};
 
-    // --- Reminders ---
-    getReminders = () => this.reminders.sort((a, b) => a.date.getTime() - b.date.getTime());
-    addReminder = (reminder: Omit<Reminder, 'id'>) => {
-        const newReminder: Reminder = {
-            ...reminder,
-            id: `mock-reminder-${Date.now()}`,
-            user_id: MOCK_USER_ID,
-        };
-        this.reminders.push(newReminder);
-        return Promise.resolve();
+// --- Other App Data ---
+export const getCart = () => cart;
+export const getOrders = () => orders;
+export const getReminderTypes = () => reminderTypes;
+export const getSavedRecipes = () => savedRecipes;
+export const getPreferences = () => preferences;
+export const updatePreferences = (updates: Partial<typeof preferences>) => {
+    preferences = { ...preferences, ...updates };
+};
+export const saveRecipe = (recipe: Recipe) => {
+    if (!savedRecipes.some(r => r.id === recipe.id)) {
+        savedRecipes.push(recipe);
     }
-    deleteReminder = (id: string) => {
-        this.reminders = this.reminders.filter(r => r.id !== id);
-    }
-    updateReminder = (id: string, updates: Partial<Reminder>) => {
-        this.reminders = this.reminders.map(r => r.id === id ? { ...r, ...updates } : r);
-        return Promise.resolve();
-    }
-    addHolidaysBatch = (holidays: { holidayName: string; date: string }[], country: string) => {
-        const newReminders: Reminder[] = holidays.map((h, i) => ({
-             id: `mock-holiday-${Date.now()}-${i}`,
-             user_id: MOCK_USER_ID,
-             title: h.holidayName,
-             date: new Date(h.date),
-             type: 'Holiday',
-             description: `Public holiday in ${country}`,
-             is_completed: false
-        }));
-        this.reminders.push(...newReminders);
-        return Promise.resolve(newReminders.length);
-    }
+};
+export const unsaveRecipe = (recipeId: string) => {
+    savedRecipes = savedRecipes.filter(r => r.id !== recipeId);
+};
+export const checkout = () => {
+    const newOrder = {
+        id: `order-${Date.now()}`,
+        date: new Date(),
+        items: cart,
+        total: cart.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0) * 1.1, // with mock tax
+    };
+    orders.unshift(newOrder);
+    cart = [];
+    return newOrder;
+};
+export const addToCart = (item: any) => { cart.push(item); };
+export const removeFromCart = (itemId: string) => { cart = cart.filter(i => i.id !== itemId); };
+export const clearCart = () => { cart = []; };
+export const updateCartItem = (itemId: string, updates: any) => {
+    cart = cart.map(item => item.id === itemId ? { ...item, ...updates } : item);
+};
 
-    // --- Reminder Types ---
-    getReminderTypes = () => this.reminderTypes;
-    addReminderType = (type: string) => {
-        if (!this.reminderTypes.includes(type)) {
-            this.reminderTypes.push(type);
-            this.reminderTypes.sort();
-        }
-    }
+// --- Mock Gemini Service ---
+export const analyzeReminderMock = async (prompt: string): Promise<Partial<Omit<Reminder, 'id'>>> => {
+    await new Promise(res => setTimeout(res, 500)); // Simulate network
+    return {
+        title: `Mock for: "${prompt}"`,
+        date: new Date(),
+        type: 'General',
+        description: `This is a mocked reminder based on your input: "${prompt}".`,
+    };
+};
 
-    // --- Recipes ---
-    getRecipes = () => this.recipes;
-    getDailyRecommendations = (isVeg: boolean): DailyRecommendationResponse => {
-        const today = new Date();
-        const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-        
-        const filteredRecipes = this.recipes.filter(r => (isVeg ? r.isVeg : true));
-        
-        const seededRandom = (max: number) => Math.floor(Number('0.' + Math.sin(seed).toString().substr(15)) * max);
-        
-        const shuffle = (array: Recipe[]) => {
-             let currentIndex = array.length, randomIndex;
-             while (currentIndex > 0) {
-                randomIndex = seededRandom(currentIndex);
-                currentIndex--;
-                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-            }
-            return array;
-        }
+export const getDashboardSuggestionsMock = async (): Promise<{ suggestions: Omit<Reminder, 'id'>[], dailyBriefing: string }> => {
+    await new Promise(res => setTimeout(res, 800));
+    return {
+        dailyBriefing: "Here's your mocked daily briefing! Have a productive day.",
+        suggestions: [
+            { title: 'Review Q3 budget', date: new Date(), type: 'Work', description: 'Check the latest figures.' },
+            { title: 'Book flight to Delhi', date: new Date(), type: 'Travel', description: 'For the conference next month.' },
+            { title: 'Water the plants', date: new Date(), type: 'Personal', description: 'They look thirsty.' },
+        ]
+    };
+};
 
-        const shuffled = shuffle([...filteredRecipes]);
+export const getServiceRecommendationsMock = async (reminder: Reminder): Promise<ActivityRecommendation[]> => {
+    await new Promise(res => setTimeout(res, 1000));
+    return [{
+        activity: `Buy a Gift for ${reminder.title}`,
+        vendors: [{
+            name: 'Mock Gift Store',
+            description: 'A fine selection of AI-generated gifts.',
+            priceRange: '₹500-2000',
+            rating: 4.5,
+            productQuery: 'birthday gifts'
+        }]
+    }];
+};
 
-        return {
-            theme: "A World of Flavors",
-            breakfast: shuffled.slice(0, 4),
-            lunch: shuffled.slice(4, 8),
-            hitea: shuffled.slice(8, 12),
-            dinner: shuffled.slice(12, 16),
-            all_time_snacks: shuffled.slice(16, 20),
-        };
-    }
-    getSavedRecipes = () => this.savedRecipes;
-    saveRecipe = (recipe: Recipe) => {
-        if (!this.savedRecipes.some(r => r.id === recipe.id)) {
-            this.savedRecipes.unshift(recipe);
-        }
-    }
-    unsaveRecipe = (recipeId: string) => {
-        this.savedRecipes = this.savedRecipes.filter(r => r.id !== recipeId);
-    }
+export const getDailyRecommendationsMock = async (): Promise<DailyRecommendationResponse> => {
+     await new Promise(res => setTimeout(res, 1200));
+     return {
+        theme: "A Taste of Mock Data",
+        breakfast: [mockRecipes[0]],
+        lunch: [mockRecipes[1]],
+        hitea: [mockRecipes[0]],
+        dinner: [mockRecipes[1]],
+        all_time_snacks: [mockRecipes[0]]
+     };
+};
 
-    // --- Cart & Orders ---
-    getCart = () => this.cart;
-    addToCart = (item: CartItem) => { this.cart.push(item); }
-    removeFromCart = (itemId: string) => { this.cart = this.cart.filter(item => item.id !== itemId); }
-    clearCart = () => { this.cart = []; }
-    updateCartItem = (itemId: string, updates: Partial<CartItem>) => {
-        this.cart = this.cart.map(item => item.id === itemId ? { ...item, ...updates } as CartItem : item);
-    }
-    getOrders = () => this.orders.sort((a,b) => b.date.getTime() - a.date.getTime());
-    checkout = () => {
-         const total = this.cart.reduce((acc, item) => {
-            let itemPrice = 0;
-            switch (item.type) {
-                case CartItemType.SERVICE: itemPrice = item.item.price * item.quantity; break;
-                case CartItemType.PREPARED_DISH: itemPrice = item.recipe.price * item.quantity; break;
-                case CartItemType.CHEF_SERVICE: itemPrice = item.price; break;
-                case CartItemType.VENDOR_PRODUCT: itemPrice = item.price * item.quantity; break;
-            }
-            return acc + itemPrice;
-        }, 0);
+export const getRecipesMock = async (query: string): Promise<Recipe[]> => {
+     await new Promise(res => setTimeout(res, 600));
+     return mockRecipes.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+};
 
-        const newOrder: Order = {
-            id: `mock-order-${Date.now()}`,
-            user_id: MOCK_USER_ID,
-            date: new Date(),
-            items: [...this.cart],
-            total: total * 1.1, // with tax
-        };
-        this.orders.unshift(newOrder);
-        this.cart = [];
-    }
+// Return empty or default for other functions to prevent errors
+export const getMockProductsForVendorMock = async (vendorName: string, productQuery: string): Promise<any[]> => {
+    await new Promise(res => setTimeout(res, 1500));
+    return [
+        { productName: `${productQuery} - Model A`, price: 1299, imageUrl: 'https://via.placeholder.com/200' },
+        { productName: `${productQuery} - Model B`, price: 1599, imageUrl: 'https://via.placeholder.com/200' },
+    ]
+};
 
-    // --- Preferences ---
-    getPreferences = () => this.preferences;
-    updatePreferences = (updates: Partial<UserPreferences>) => {
-        this.preferences = { ...this.preferences, ...updates };
-        return Promise.resolve();
-    }
-    completeOnboarding = () => {
-        this.preferences.has_completed_tutorial = true;
-        return Promise.resolve();
-    }
-}
+export const getAnalyticsInsightsMock = async (): Promise<string> => {
+    await new Promise(res => setTimeout(res, 900));
+    return `
+# Productivity Snapshot
+You are great at creating reminders!
 
-export const mockDataService = MockDataService.getInstance();
+# Spending Habits
+You haven't spent anything in demo mode.
+
+# Personalized Tips
+- Try adding more reminders.
+- Explore the recipes page for fun.
+    `;
+};

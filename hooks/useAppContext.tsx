@@ -1,9 +1,5 @@
 
 
-
-
-
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo } from 'react';
 import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder, UserPreferences, FollowUpReminder } from '../types';
 import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
@@ -11,10 +7,9 @@ import { extractFollowUpReminder } from '../services/geminiService';
 import { useAuth } from './useAuthContext';
 import { supabase } from '../services/supabaseClient';
 import Spinner from '../components/Spinner';
-import { USE_MOCK_DATA } from '../config';
-import { mockDataService } from '../services/mockDataService';
 import { Json } from '../services/supabaseClient';
-
+import { USE_MOCK_DATA } from '../config';
+import * as mockDataService from '../services/mockDataService';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -51,21 +46,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [preferences, setPreferences] = useState<UserPreferences | null>(null);
     const [loadingData, setLoadingData] = useState(true);
 
+    // This effect handles the initial data loading, branching between mock and live data.
     useEffect(() => {
+        if (USE_MOCK_DATA) {
+            setReminders(mockDataService.getReminders());
+            setCart(mockDataService.getCart());
+            setOrders(mockDataService.getOrders());
+            setReminderTypes(mockDataService.getReminderTypes());
+            setSavedRecipes(mockDataService.getSavedRecipes());
+            setPreferences(mockDataService.getPreferences() as UserPreferences);
+            setLoadingData(false);
+            return;
+        }
+
         if (userId) {
-            setLoadingData(true);
-            
-            if (USE_MOCK_DATA) {
-                setReminders(mockDataService.getReminders());
-                setReminderTypes(mockDataService.getReminderTypes());
-                setOrders(mockDataService.getOrders());
-                setSavedRecipes(mockDataService.getSavedRecipes());
-                setCart(mockDataService.getCart());
-                setPreferences(mockDataService.getPreferences());
+            // FIX: Add a guard to ensure the Supabase client is available before proceeding.
+            // This satisfies TypeScript's type checker when mock data mode might make the client null.
+            if (!supabase) {
+                console.error("[AppContext] Supabase client is not available.");
                 setLoadingData(false);
                 return;
             }
-
+            setLoadingData(true);
+            
             const fetchData = async () => {
                 try {
                     const [remindersRes, typesRes, ordersRes, savedRecipesRes, cartRes, preferencesRes] = await Promise.all([
@@ -78,30 +81,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                     ]);
 
                     if (remindersRes.error) throw remindersRes.error;
-                    const fetchedReminders = ((remindersRes.data as any) || []).map((r: any) => ({...r, date: new Date(r.date)}));
+                    const fetchedReminders = (remindersRes.data || []).map((r: any) => ({...r, date: new Date(r.date)}));
                     setReminders(fetchedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
 
                     if (typesRes.error) throw typesRes.error;
-                    setReminderTypes(((typesRes.data as any) || []).map((t: any) => t.name));
+                    setReminderTypes((typesRes.data || []).map((t: any) => t.name));
 
                     if (ordersRes.error) throw ordersRes.error;
-                    const fetchedOrders = ((ordersRes.data as any) || []).map((o: any) => ({ ...o, date: new Date(o.date) }));
+                    const fetchedOrders = (ordersRes.data || []).map((o: any) => ({ ...o, date: new Date(o.date) }));
                     setOrders(fetchedOrders);
 
                     if (savedRecipesRes.error) throw savedRecipesRes.error;
-                    setSavedRecipes(((savedRecipesRes.data as any) || []).map((r: any) => r.recipe_data as Recipe));
+                    setSavedRecipes((savedRecipesRes.data || []).map((r: any) => r.recipe_data as Recipe));
 
                     if (cartRes.error && cartRes.error.code !== 'PGRST116') throw cartRes.error; // Ignore "no rows" error
-                    // FIX: Cast cartRes to 'any' to access the 'data' property, as its type was incorrectly inferred as 'never'.
-                    setCart((((cartRes as any).data)?.items as CartItem[]) || []);
+                    // FIX: Explicitly handle the case where cart items might be null.
+                    setCart((cartRes.data?.items as CartItem[] | null) ?? []);
                     
                     if (preferencesRes.error && preferencesRes.error.code !== 'PGRST116') throw preferencesRes.error;
                     if (!preferencesRes.data) {
-                        const { data: newPreferences, error: newPrefError } = await supabase.from('user_preferences').insert({ user_id: userId } as any).select().single();
+                        // FIX: Ensure Supabase client type is correctly inferred.
+                        const { data: newPreferences, error: newPrefError } = await supabase.from('user_preferences').insert({ user_id: userId }).select().single();
                         if (newPrefError) throw newPrefError;
-                        setPreferences(newPreferences as any);
+                        setPreferences(newPreferences);
                     } else {
-                        setPreferences(preferencesRes.data as any);
+                        setPreferences(preferencesRes.data);
                     }
                 } catch (error) {
                     console.error("[AppContext] Error fetching initial user data from Supabase:", (error as any).message || error);
@@ -116,7 +120,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                      const { data, error } = await supabase.from('reminders').select('*').eq('user_id', userId);
                      if (error) console.error('[AppContext] Realtime error refetching reminders:', error);
                      else {
-                         const updatedReminders = ((data as any) || []).map((r: any) => ({ ...r, date: new Date(r.date) }));
+                         const updatedReminders = (data || []).map((r: any) => ({ ...r, date: new Date(r.date) }));
                          setReminders(updatedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
                      }
                 })
@@ -127,21 +131,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             };
 
         } else {
-            setReminders([]);
-            setCart([]);
-            setReminderTypes([]);
-            setOrders([]);
-            setSavedRecipes([]);
-            setPreferences(null);
+            setReminders([]); setCart([]); setReminderTypes([]); setOrders([]); setSavedRecipes([]); setPreferences(null);
             setLoadingData(false);
         }
     }, [userId]);
     
+    // This effect handles saving the cart state, but only in live mode.
     useEffect(() => {
-        if (userId && !loadingData && !USE_MOCK_DATA) {
+        if (USE_MOCK_DATA) return;
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!supabase) return;
+
+        if (userId && !loadingData) {
             const saveCart = async () => {
-                // FIX: Cast the entire payload object to 'any' to resolve the type mismatch where the expected parameter was 'never'.
-                const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart } as any, { onConflict: 'user_id' });
+                // FIX: Ensure Supabase client type is correctly inferred.
+                const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart as unknown as Json }, { onConflict: 'user_id' });
                 if (error) console.error('[AppContext] Error saving cart to Supabase:', (error as any).message || error);
             };
             saveCart();
@@ -157,54 +161,60 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         requestNotificationPermission();
         reminders.forEach(scheduleNotificationsForReminder);
-        return () => {
-            reminders.forEach(r => cancelNotificationsForReminder(r.id));
-        };
+        return () => { reminders.forEach(r => cancelNotificationsForReminder(r.id)); };
     }, [reminders]);
 
 
     const addReminder = async (reminder: Omit<Reminder, 'id' | 'user_id'>) => {
-        if (!userId) throw new Error("User not authenticated.");
         if (USE_MOCK_DATA) {
-            await mockDataService.addReminder(reminder);
+            const newReminder = mockDataService.addReminder(reminder);
             setReminders([...mockDataService.getReminders()]);
+            scheduleNotificationsForReminder(newReminder);
             return;
         }
-        const { data, error } = await supabase.from('reminders').insert({ ...reminder, user_id: userId, date: reminder.date.toISOString() } as any).select().single();
+
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!userId || !supabase) throw new Error("User not authenticated.");
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { data, error } = await supabase.from('reminders').insert({ ...reminder, user_id: userId, date: reminder.date.toISOString() }).select().single();
         if (error) throw new Error(`Failed to add reminder: ${error.message}`);
         if (!data) throw new Error('Failed to add reminder: no data returned.');
-        scheduleNotificationsForReminder({ ...(data as any), date: new Date((data as any).date) } as Reminder);
+        // FIX: Ensure Supabase client type is correctly inferred.
+        scheduleNotificationsForReminder({ ...(data as any), date: new Date(data.date) });
     };
 
     const deleteReminder = async (id: string) => {
-        if (!userId) return;
+        cancelNotificationsForReminder(id);
         if (USE_MOCK_DATA) {
             mockDataService.deleteReminder(id);
             setReminders([...mockDataService.getReminders()]);
             return;
         }
+
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!userId || !supabase) return;
         const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', userId);
-        if (error) { console.error('[AppContext] Error deleting reminder:', error); return; }
-        cancelNotificationsForReminder(id);
+        if (error) { console.error('[AppContext] Error deleting reminder:', error); }
     };
 
     const updateReminder = async (id: string, updates: Partial<Reminder>) => {
-        if (!userId) throw new Error("User not authenticated.");
          if (USE_MOCK_DATA) {
-            await mockDataService.updateReminder(id, updates);
+            const updated = mockDataService.updateReminder(id, updates);
             setReminders([...mockDataService.getReminders()]);
+            scheduleNotificationsForReminder(updated);
             return;
         }
+
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!userId || !supabase) throw new Error("User not authenticated.");
         const { date, ...restUpdates } = updates;
-        const dbUpdates = {
-            ...restUpdates,
-            ...(date && { date: date.toISOString() }),
-        };
-        // FIX: Cast the update payload to 'any' to work around the incorrect type inference to 'never'.
-        const { data, error } = await supabase.from('reminders').update(dbUpdates as any).eq('id', id).eq('user_id', userId).select().single();
+        const dbUpdates = { ...restUpdates, ...(date && { date: date.toISOString() }) };
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { data, error } = await supabase.from('reminders').update(dbUpdates).eq('id', id).eq('user_id', userId).select().single();
         if (error) throw new Error(`Failed to update reminder: ${error.message}`);
         if (!data) throw new Error('Failed to update reminder: no data returned.');
-        scheduleNotificationsForReminder({ ...(data as any), date: new Date((data as any).date) } as Reminder);
+        // FIX: Ensure Supabase client type is correctly inferred.
+        scheduleNotificationsForReminder({ ...(data as any), date: new Date(data.date) });
     };
 
     const completeReminder = (id: string) => {
@@ -223,56 +233,34 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const addReminderType = async (newType: ReminderType) => {
         const upperCaseNew = newType.toUpperCase().trim();
         if (!upperCaseNew || reminderTypes.map(t => t.toUpperCase().trim()).includes(upperCaseNew)) return;
+        const trimmedType = newType.trim();
+        setReminderTypes(prev => [...prev, trimmedType].sort());
 
-        if (USE_MOCK_DATA) {
-            mockDataService.addReminderType(newType);
-            setReminderTypes([...mockDataService.getReminderTypes()]);
-            return;
-        }
-
-        setReminderTypes(prev => [...prev, newType.trim()].sort());
-
-        if (!userId) return;
-        const { error } = await supabase.from('reminder_types').insert({ user_id: userId, name: newType.trim() } as any);
+        if (USE_MOCK_DATA) return;
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!userId || !supabase) return;
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { error } = await supabase.from('reminder_types').insert({ user_id: userId, name: trimmedType });
         if (error) console.error('[AppContext] Error saving new reminder type to Supabase:', error);
     };
     
     const addHolidaysBatch = async (holidays: { holidayName: string, date: string }[], country: string): Promise<number> => {
         if (!currentUser) return 0;
 
-        if (USE_MOCK_DATA) {
-            const count = await mockDataService.addHolidaysBatch(holidays, country);
-            setReminders([...mockDataService.getReminders()]);
-            return count;
-        }
-        
-        const newReminders: Omit<Reminder, 'id' | 'user_id'>[] = [];
-        holidays.forEach(holiday => {
-            const holidayDate = new Date(`${holiday.date}T12:00:00`); 
-            const reminderExists = reminders.some(r => 
-                r.title.toLowerCase() === holiday.holidayName.toLowerCase() && 
-                r.date.toDateString() === holidayDate.toDateString()
-            );
-
-            if (!reminderExists) {
-                newReminders.push({
-                    title: holiday.holidayName,
-                    date: holidayDate,
-                    type: 'Holiday',
-                    description: `Public holiday in ${country}.`,
-                    is_completed: false,
-                });
-            }
-        });
+        const newReminders: Omit<Reminder, 'id' | 'user_id'>[] = holidays
+            .map(h => ({ ...h, dateObj: new Date(`${h.date}T12:00:00`) }))
+            .filter(h => !reminders.some(r => r.title.toLowerCase() === h.holidayName.toLowerCase() && r.date.toDateString() === h.dateObj.toDateString()))
+            .map(h => ({
+                title: h.holidayName,
+                date: h.dateObj,
+                type: 'Holiday',
+                description: `Public holiday in ${country}.`,
+                is_completed: false,
+            }));
 
         if (newReminders.length > 0) {
-            const remindersForDb = newReminders.map(r => ({...r, user_id: currentUser.id, date: r.date.toISOString()}));
-            const { data, error } = await supabase.from('reminders').insert(remindersForDb as any).select();
-            if (error) { console.error('[AppContext] Error adding holidays batch to Supabase:', error); return 0; }
-            
-            const addedReminders = ((data as any) || []).map((r: any) => ({...r, date: new Date(r.date)}));
-            addedReminders.forEach(scheduleNotificationsForReminder);
-            return addedReminders.length;
+            for (const r of newReminders) { await addReminder(r); }
+            return newReminders.length;
         }
         return 0;
     };
@@ -280,66 +268,47 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const addToCart = (itemToAdd: Service | CartItem) => {
         let newCartItem: CartItem;
-
-        // Logic to handle both Service (deprecated) and CartItem types
-        if ('provider' in itemToAdd) { // It's a Service
-             newCartItem = { id: `cart-${Date.now()}`, type: CartItemType.SERVICE, item: itemToAdd, quantity: 1 };
-        } else {
-            newCartItem = { ...itemToAdd, id: itemToAdd.id || `cart-${Date.now()}` };
-        }
+        if ('provider' in itemToAdd) { newCartItem = { id: `cart-${Date.now()}`, type: CartItemType.SERVICE, item: itemToAdd, quantity: 1 }; } 
+        else { newCartItem = { ...itemToAdd, id: itemToAdd.id || `cart-${Date.now()}` }; }
 
         setCart(prevCart => {
-             // More robust duplicate checking and quantity incrementing
+            if (USE_MOCK_DATA) {
+                mockDataService.addToCart(newCartItem);
+                return [...prevCart, newCartItem];
+            }
              if (newCartItem.type === CartItemType.PREPARED_DISH) {
                 const existing = prevCart.find(i => i.type === CartItemType.PREPARED_DISH && i.recipe.id === newCartItem.recipe.id) as PreparedDishCartItem | undefined;
-                if (existing) {
-                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: existing.quantity + 1 } : i);
-                }
+                if (existing) { return prevCart.map(i => i.id === existing.id ? { ...i, quantity: existing.quantity + 1 } : i); }
             } else if (newCartItem.type === CartItemType.VENDOR_PRODUCT) {
                  const existing = prevCart.find(i => i.type === CartItemType.VENDOR_PRODUCT && i.productName === newCartItem.productName && i.vendor === newCartItem.vendor) as VendorProductCartItem | undefined;
-                 if (existing) {
-                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as VendorProductCartItem).quantity + 1 } : i);
-                }
+                 if (existing) { return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as VendorProductCartItem).quantity + 1 } : i); }
             } else if (newCartItem.type === CartItemType.SERVICE) {
                 const existing = prevCart.find(i => i.type === CartItemType.SERVICE && i.item.id === newCartItem.item.id) as ServiceCartItem | undefined;
-                 if (existing) {
-                    return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as ServiceCartItem).quantity + 1 } : i);
-                }
+                 if (existing) { return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as ServiceCartItem).quantity + 1 } : i); }
             }
             return [...prevCart, newCartItem];
         });
     };
 
     const removeFromCart = (itemId: string) => {
+        if (USE_MOCK_DATA) mockDataService.removeFromCart(itemId);
         setCart(prev => prev.filter(item => item.id !== itemId));
     };
 
     const updateCartItem = (itemId: string, updates: Partial<CartItem>) => {
+        if (USE_MOCK_DATA) mockDataService.updateCartItem(itemId, updates);
         setCart(prev => prev.map(item => item.id === itemId ? { ...item, ...updates } as CartItem : item));
     };
 
-
     const clearCart = () => {
+        if (USE_MOCK_DATA) mockDataService.clearCart();
         setCart([]);
     };
     
-    const cartCount = cart.reduce((count, item) => {
-        return count + (('quantity' in item && typeof item.quantity === 'number') ? item.quantity : 1);
-    }, 0);
-
-    const getItemNameForOrder = (item: CartItem): string => {
-         switch (item.type) {
-            case CartItemType.SERVICE: return item.item.name;
-            case CartItemType.PREPARED_DISH: return item.recipe.name;
-            case CartItemType.INGREDIENTS_LIST: return `Ingredients for ${item.recipe.name}`;
-            case CartItemType.CHEF_SERVICE: return `Chef for ${item.recipe.name}`;
-            case CartItemType.VENDOR_PRODUCT: return item.productName;
-            default: return "Unknown Item";
-        }
-    }
+    const cartCount = cart.reduce((count, item) => count + (('quantity' in item && typeof item.quantity === 'number') ? item.quantity : 1), 0);
 
     const analyzeOrderForFollowUps = async (order: Order) => {
-        const followUpPromises = order.items.map(item => extractFollowUpReminder(getItemNameForOrder(item), order.date));
+        const followUpPromises = order.items.map(item => extractFollowUpReminder(item.type, order.date));
         const results = await Promise.all(followUpPromises);
         const validFollowUps = results.filter((followUp): followUp is { title: string; date: Date } => !!followUp);
 
@@ -347,18 +316,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             for (const followUp of validFollowUps) {
                 try {
                     await addReminder({
-                        title: followUp.title,
-                        date: followUp.date,
-                        type: 'Renewal',
+                        title: followUp.title, date: followUp.date, type: 'Renewal',
                         description: `Automatically added from order #${order.id.slice(-6)}`,
-                        is_completed: false,
-                        source: 'Purchase',
+                        is_completed: false, source: 'Purchase',
                     });
                 } catch (err) { console.error("[AppContext] Failed to add follow-up reminder:", err); }
             }
-            if (USE_MOCK_DATA) return;
+            // FIX: Add a guard to ensure the Supabase client is available.
+            if (USE_MOCK_DATA || !supabase) return;
             const serializableFollowUps = validFollowUps.map(f => ({ ...f, date: f.date.toISOString() }));
-            const { error } = await supabase.from('orders').update({ followUpReminders: serializableFollowUps as any } as any).eq('id', order.id);
+            // FIX: Ensure Supabase client type is correctly inferred.
+            const { error } = await supabase.from('orders').update({ followUpReminders: serializableFollowUps as unknown as Json }).eq('id', order.id);
             if(error) console.error("[AppContext] Error updating order with follow-up reminders:", error);
         }
     };
@@ -366,12 +334,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const checkout = async () => {
         if (cart.length === 0 || !currentUser) return;
-         if (USE_MOCK_DATA) {
-            mockDataService.checkout();
+        
+        if (USE_MOCK_DATA) {
+            const newOrder = mockDataService.checkout();
             setOrders([...mockDataService.getOrders()]);
             setCart([]);
+            analyzeOrderForFollowUps(newOrder as Order);
             return;
         }
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!supabase) return;
 
         const total = cart.reduce((acc, item) => {
             let itemPrice = 0;
@@ -383,23 +355,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             }
             return acc + itemPrice;
         }, 0);
-
         const firstItemWithReminder = cart.find(item => item.reminderId && item.reminderTitle);
-        
         const newOrder: Omit<Order, 'id'> = {
-            date: new Date(),
-            items: cart,
-            total,
-            reminderId: firstItemWithReminder?.reminderId,
-            reminderTitle: firstItemWithReminder?.reminderTitle,
-            user_id: currentUser.id
+            date: new Date(), items: cart, total, reminderId: firstItemWithReminder?.reminderId,
+            reminderTitle: firstItemWithReminder?.reminderTitle, user_id: currentUser.id
         };
         
-        const { data, error } = await supabase.from('orders').insert({ ...newOrder, date: newOrder.date.toISOString(), items: newOrder.items as any } as any).select().single();
-        if (error) { console.error('[AppContext] Error creating order in Supabase:', error); return; }
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { data, error } = await supabase.from('orders').insert({ ...newOrder, date: newOrder.date.toISOString(), items: newOrder.items as unknown as Json }).select().single();
+        if (error || !data) { console.error('[AppContext] Error creating order:', error); return; }
         
-        if (!data) { console.error('[AppContext] Error creating order: no data returned.'); return; }
-        const createdOrder: Order = { ...(data as any), date: new Date((data as any).date) };
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const createdOrder: Order = { ...(data as any), date: new Date(data.date) };
         setOrders(prev => [createdOrder, ...prev]);
         clearCart();
         analyzeOrderForFollowUps(createdOrder);
@@ -407,50 +374,36 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     
     const saveRecipe = async (recipe: Recipe) => {
         if (!currentUser || savedRecipes.some(r => r.id === recipe.id)) return;
-
-        if (USE_MOCK_DATA) {
-            mockDataService.saveRecipe(recipe);
-            setSavedRecipes([...mockDataService.getSavedRecipes()]);
-            return;
-        }
-        
         setSavedRecipes(prev => [recipe, ...prev]);
-        
-        const { error } = await supabase.from('saved_recipes').insert({ user_id: currentUser.id, recipe_id: recipe.id, recipe_data: recipe as any } as any);
-        if (error) console.error('[AppContext] Error saving recipe to Supabase:', error);
+        if (USE_MOCK_DATA) { mockDataService.saveRecipe(recipe); return; }
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!supabase) return;
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { error } = await supabase.from('saved_recipes').insert({ user_id: currentUser.id, recipe_id: recipe.id, recipe_data: recipe as unknown as Json });
+        if (error) console.error('[AppContext] Error saving recipe:', error);
     };
 
     const unsaveRecipe = async (recipeId: string) => {
         if (!currentUser) return;
-        
-        if (USE_MOCK_DATA) {
-            mockDataService.unsaveRecipe(recipeId);
-            setSavedRecipes([...mockDataService.getSavedRecipes()]);
-            return;
-        }
-
         setSavedRecipes(prev => prev.filter(r => r.id !== recipeId));
-        
+        if (USE_MOCK_DATA) { mockDataService.unsaveRecipe(recipeId); return; }
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!supabase) return;
         const { error } = await supabase.from('saved_recipes').delete().eq('user_id', currentUser.id).eq('recipe_id', recipeId);
-        if (error) console.error('[AppContext] Error unsaving recipe from Supabase:', error);
+        if (error) console.error('[AppContext] Error unsaving recipe:', error);
     };
 
     const updatePreferences = async (updates: Partial<Omit<UserPreferences, 'user_id'>>) => {
         if (!currentUser || !preferences) return;
-
-        if (USE_MOCK_DATA) {
-            await mockDataService.updatePreferences(updates);
-            setPreferences({ ...mockDataService.getPreferences() });
-            return;
-        }
-
         const updatedPrefs = { ...preferences, ...updates };
         setPreferences(updatedPrefs);
-
-        // FIX: Cast the upsert payload to 'any' to work around the incorrect type inference to 'never'.
-        const { data, error } = await supabase.from('user_preferences').upsert(updatedPrefs as any).select().single();
-        if (error) console.error('[AppContext] Error updating user preferences in Supabase:', error);
-        else setPreferences(data as any);
+        if (USE_MOCK_DATA) { mockDataService.updatePreferences(updates); return; }
+        // FIX: Add a guard to ensure the Supabase client is available.
+        if (!supabase) return;
+        // FIX: Ensure Supabase client type is correctly inferred.
+        const { data, error } = await supabase.from('user_preferences').upsert(updatedPrefs).select().single();
+        if (error) console.error('[AppContext] Error updating preferences:', error);
+        else setPreferences(data);
     };
 
     const completeOnboarding = async () => {
@@ -467,13 +420,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         savedRecipes, saveRecipe, unsaveRecipe,
         preferences, updatePreferences, completeOnboarding,
     };
-
-    // This effect is for mock mode only, to keep cart in sync if it's changed.
-    useEffect(() => {
-        if (USE_MOCK_DATA) {
-            mockDataService.cart = cart;
-        }
-    }, [cart]);
 
     return (
         <AppContext.Provider value={value}>

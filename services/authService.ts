@@ -1,10 +1,9 @@
-
-
 import { User } from '../types';
 import { supabase } from './supabaseClient';
 // The `AuthSubscription` type is aliased as `Subscription` for consistency.
 // FIX: Import auth-related types from '@supabase/supabase-js' instead of the outdated '@supabase/gotrue-js' to resolve type mismatches.
-import type { User as SupabaseUser, Provider, AuthResponse, Subscription } from '@supabase/supabase-js';
+// FIX: Corrected Supabase type imports to use `Subscription` instead of the non-existent `AuthSubscription`.
+import type { User as SupabaseUser, Provider, Subscription } from '@supabase/supabase-js';
 
 
 // Helper to map the Supabase user object to our application's User type.
@@ -33,7 +32,7 @@ export const signup = async ({ email, password, fullName }: { email?: string; pa
     if (!email || !password || !fullName) {
         throw new Error("Full name, email, and password are required for sign up.");
     }
-    const { data, error }: AuthResponse = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -61,7 +60,7 @@ export const login = async (
         if (!credentials?.email || !credentials?.password) {
             throw new Error("Email and password are required.");
         }
-        const { data, error }: AuthResponse = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
             email: credentials.email,
             password: credentials.password,
         });

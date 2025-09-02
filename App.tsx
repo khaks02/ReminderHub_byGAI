@@ -1,10 +1,13 @@
 
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 import { AuthProvider, useAuth } from './hooks/useAuthContext';
+import { isSupabaseConfigured } from './config';
+import ConfigurationErrorPage from './pages/ConfigurationErrorPage';
 
 import { Home, Utensils, Settings, ShoppingCart, Sun, Moon, ShoppingBag, User, LogOut, BarChart2, Calendar } from 'lucide-react';
 import Breadcrumb from './components/Breadcrumb';
@@ -272,13 +275,19 @@ const AppRoutes = () => {
 };
 
 
-const App = () => (
-    <ReactRouterDOM.HashRouter>
-        <AuthProvider>
-            <AppRoutes />
-        </AuthProvider>
-    </ReactRouterDOM.HashRouter>
-);
+const App = () => {
+    if (!isSupabaseConfigured()) {
+        return <ConfigurationErrorPage />;
+    }
+
+    return (
+        <ReactRouterDOM.HashRouter>
+            <AuthProvider>
+                <AppRoutes />
+            </AuthProvider>
+        </ReactRouterDOM.HashRouter>
+    );
+};
 
 
 export default App;
