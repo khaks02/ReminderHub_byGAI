@@ -5,167 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>myreminder</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                DEFAULT: 'hsl(210, 80%, 55%)',
-                light: 'hsl(210, 80%, 65%)',
-                dark: 'hsl(210, 80%, 45%)',
-              },
-              subtle: {
-                light: 'hsl(210, 30%, 96%)',
-                dark: 'hsl(220, 20%, 12%)',
-              },
-              accent: {
-                light: 'hsl(210, 15%, 90%)',
-                dark: 'hsl(220, 15%, 25%)',
-              },
-              bkg: {
-                light: 'hsl(210, 20%, 98%)',
-                dark: 'hsl(220, 20%, 10%)',
-              },
-              content: {
-                light: 'hsl(220, 15%, 20%)',
-                dark: 'hsl(210, 20%, 95%)',
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      @keyframes fadeInUp {
-        from { opacity: 0; transform: translate3d(0, 20px, 0) scale(0.98); }
-        to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-      }
-      @keyframes popIn {
-        0% { opacity: 0; transform: scale(0.95) translateY(10px); }
-        100% { opacity: 1; transform: scale(1) translateY(0); }
-      }
-      @keyframes fadeOutShrink {
-        0% { opacity: 1; transform: scale(1); max-height: 500px; margin-bottom: 1.5rem; }
-        100% { opacity: 0; transform: scale(0.95); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0;}
-      }
-      .animate-fade-in {
-        animation: fadeIn 0.3s ease-out forwards;
-      }
-      .animate-fade-in-up {
-        animation: fadeInUp 0.5s ease-out forwards;
-        opacity: 0; /* Start hidden for animation */
-      }
-      .animate-pop-in {
-        animation: popIn 0.4s ease-out forwards;
-      }
-      .animate-fade-out-shrink {
-        animation: fadeOutShrink 0.4s ease-out forwards;
-        overflow: hidden;
-      }
-      
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: hsl(220, 15%, 75%);
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: hsl(220, 15%, 65%);
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: hsl(220, 15%, 35%);
-      }
-      .dark ::-webkit-scrollbar-thumb:hover {
-        background: hsl(220, 15%, 45%);
-      }
-      /* Card Hover Effect */
-      .card-lift {
-        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-      }
-      .card-lift:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -2px rgb(0 0 0 / 0.05);
-      }
-      .dark .card-lift:hover {
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -2px rgb(0 0 0 / 0.15);
-      }
-      /* Button Pulse Animation */
-      @keyframes pulse-glow {
-        0%, 100% {
-            box-shadow: 0 0 5px hsla(210, 80%, 65%, 0.5), 0 0 10px hsla(210, 80%, 65%, 0.4);
-        }
-        50% {
-            box-shadow: 0 0 15px hsla(210, 80%, 55%, 0.7), 0 0 25px hsla(210, 80%, 55%, 0.6);
-        }
-      }
-      .animate-pulse-glow {
-        animation: pulse-glow 2.5s infinite ease-in-out;
-      }
-
-      /* New Coming Soon Page Styles */
-      .animated-gradient {
-        background: linear-gradient(-45deg, hsl(220, 20%, 10%), hsl(222, 47%, 11%), hsl(244, 40%, 26%), hsl(210, 80%, 45%));
-        background-size: 400% 400%;
-        animation: gradientBG 15s ease infinite;
-      }
-
-      @keyframes gradientBG {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-
-      #interactive-orb {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 300px;
-          height: 300px;
-          background: radial-gradient(circle, hsla(210, 80%, 55%, 0.2), transparent 60%);
-          border-radius: 50%;
-          pointer-events: none;
-          transform: translate(-50%, -50%);
-          transition: width 0.3s ease, height 0.3s ease, opacity 0.3s ease;
-          z-index: 0;
-          opacity: 0;
-      }
-      @media (pointer: fine) {
-        #interactive-orb {
-          opacity: 1;
-        }
-      }
-    </style>
+    <!-- Tailwind CDN, inline config, styles, and importmap removed for build-time processing -->
   <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
-    "react/": "https://esm.sh/react@18.2.0/",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.25.1?deps=react@18.2.0",
-    "lucide-react": "https://esm.sh/lucide-react@0.536.0?deps=react@18.2.0",
-    "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.2.0,react-dom@18.2.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.0",
-    "@supabase/gotrue-js": "https://aistudiocdn.com/@supabase/gotrue-js@^2.71.1"
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.2",
+    "recharts": "https://aistudiocdn.com/recharts@^3.1.2",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "vite": "https://aistudiocdn.com/vite@^7.1.4",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.542.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.8.2",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.57.2",
+    "path": "https://aistudiocdn.com/path@^0.12.7"
   }
 }
 </script>
 </head>
-  <body class="bg-bkg-light dark:bg-bkg-dark text-content-light dark:text-content-dark">
+  <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

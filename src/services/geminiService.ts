@@ -383,7 +383,23 @@ export const getDashboardSuggestions = async (reminders: Reminder[]): Promise<{ 
         responseSchema: schema
     };
 
-    const result = await generateAndParseJson(prompt, config);
+    let result;
+    try {
+        result = await generateAndParseJson(prompt, config);
+    } catch (error) {
+        console.error('[GeminiService] getDashboardSuggestions: Failed to get AI suggestions:', error);
+        // Return a default, empty state to prevent app crash
+        return { dailyBriefing: "Couldn't load suggestions, but have a great day!", suggestions: [] };
+    }
+
+    if (!result || !Array.isArray(result.suggestions)) {
+        console.warn('[GeminiService] getDashboardSuggestions: AI response did not contain a valid `suggestions` array.', result);
+        return {
+            dailyBriefing: result?.dailyBriefing || "Couldn't load suggestions, but have a great day!",
+            suggestions: []
+        };
+    }
+
     const suggestionsWithDates = result.suggestions.map((s: any) => ({
         ...s,
         date: new Date(s.date)
