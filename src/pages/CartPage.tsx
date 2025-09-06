@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket } from 'lucide-react';
+import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, Package } from 'lucide-react';
 import { CartItem, CartItemType, PreparedDishCartItem, VendorProductCartItem } from '../types';
 import * as ReactRouterDOM from 'react-router-dom';
 

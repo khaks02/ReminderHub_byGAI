@@ -1,164 +1,63 @@
-import { Reminder, ReminderType, Recipe, ActivityRecommendation, DailyRecommendationResponse, Order, VendorSuggestion, CartItemType, FollowUpReminder } from '../types';
-import { supabase } from './supabaseClient';
+import { Reminder, Recipe, ActivityRecommendation, DailyRecommendationResponse, Order, VendorSuggestion, CartItemType, FollowUpReminder } from '../types';
 import { USE_MOCK_DATA } from '../config';
 import * as mockDataService from './mockDataService';
-
-// This service now intelligently switches between live API calls and mock data.
-
-// Per Gemini API guidelines, defining the schema types as an enum.
-// Although these are just strings, it improves code clarity and maintainability.
-enum Type {
-  STRING = 'STRING',
-  NUMBER = 'NUMBER',
-  INTEGER = 'INTEGER',
-  BOOLEAN = 'BOOLEAN',
-  ARRAY = 'ARRAY',
-  OBJECT = 'OBJECT',
-}
+import { GoogleGenAI, Type } from '@google/genai';
 
 
-// --- Secure AI Invocation via Supabase Edge Function ---
-const invokeGeminiProxy = async (type: 'generateContent' | 'generateImages', payload: any) => {
-    if (!supabase) throw new Error("Supabase client is not initialized.");
-    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-        body: { type, payload }
-    });
-
-    if (error) {
-        let detailedError = error.message;
-        // The error context from supabase-js may contain the raw response object.
-        // We attempt to parse it for a more specific error message from the function.
-        if (error.context && typeof error.context.json === 'function') {
-            try {
-                const errorData = await error.context.json();
-                if (errorData.error) {
-                    detailedError = errorData.error;
-                }
-            } catch (e) {
-                // If parsing fails, we fall back to the default error message.
-                console.error("Could not parse error response from Edge Function:", e);
-            }
-        }
-        throw new Error(`[GeminiProxy] ${detailedError}`);
-    }
-    
-    // This handles cases where the function returns a 200 OK status but includes an error in the body.
-    if (data && data.error) {
-        throw new Error(`[GeminiProxy] ${data.error}`);
-    }
-    return data;
-};
-
-const invokeOpenAIProxy = async (payload: any) => {
-    if (!supabase) throw new Error("Supabase client is not initialized.");
-    const { data, error } = await supabase.functions.invoke('openai-proxy', {
-        body: payload 
-    });
-
-    if (error) {
-        let detailedError = error.message;
-        if (error.context && typeof error.context.json === 'function') {
-            try {
-                const errorData = await error.context.json();
-                if (errorData.error) {
-                    detailedError = errorData.error;
-                }
-            } catch (e) {
-                console.error("Could not parse error response from Edge Function:", e);
-            }
-        }
-        throw new Error(`[OpenAIProxy] ${detailedError}`);
-    }
-
-    if (data && data.error) {
-        throw new Error(`[OpenAIProxy] ${data.error}`);
-    }
-    return data;
-};
+// Initialize the Google Gemini AI Client.
+// Per project guidelines, the API key MUST be available in the execution
+// environment as `process.env.API_KEY`.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 
 /**
- * Converts a Gemini-style JSON schema object into a text instruction for OpenAI.
- * @param schema The Gemini responseSchema object.
- * @returns A string to be appended to the OpenAI prompt.
+ * Generates content from the Gemini API and parses the response as JSON.
+ * @param prompt The text prompt to send to the model.
+ * @param config The generation configuration, including response schema.
+ * @returns A parsed JSON object.
  */
-const convertGeminiSchemaToText = (schema: any): string => {
-    if (!schema) return "";
-    try {
-        const schemaString = JSON.stringify(schema, (key, value) => {
-            if (key === 'description') return undefined; // Omit verbose descriptions for a concise prompt
-            return value;
-        }, 2);
-        
-        return `\n\nIMPORTANT: You MUST respond with a valid JSON object. Do not include any text, markdown, or explanations before or after the JSON. The JSON must conform to this structure:\n${schemaString}`;
-    } catch {
-        return "\n\nIMPORTANT: You MUST respond with a valid JSON object. Do not include any text, markdown, or explanations before or after the JSON.";
-    }
-};
-
-
 const generateAndParseJson = async (prompt: string, config: any) => {
     try {
-        // First, try Gemini
-        const response = await invokeGeminiProxy('generateContent', {
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: config,
         });
 
         const text = response.text;
-        if (!text) throw new Error("Gemini returned an empty response.");
+        if (!text) {
+            throw new Error("Gemini returned an empty response.");
+        }
         
+        // Clean up potential markdown formatting before parsing.
         const cleanedText = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
         return JSON.parse(cleanedText);
-    } catch (geminiError) {
-        console.warn("[GeminiService] Gemini call failed, attempting fallback to OpenAI.", geminiError);
-        // Fallback to OpenAI if Gemini fails
-        try {
-            const openAIPrompt = prompt + convertGeminiSchemaToText(config.responseSchema);
-            const response = await invokeOpenAIProxy({
-                model: 'gpt-4o-mini',
-                prompt: openAIPrompt,
-                response_format: { type: "json_object" },
-            });
-            
-            const text = response.text;
-            if (!text) throw new Error("OpenAI fallback returned an empty response.");
-            
-            return JSON.parse(text);
-        } catch (openAIError) {
-            console.error("[GeminiService] OpenAI fallback also failed:", openAIError);
-            const errorMessage = `Gemini Error: ${geminiError instanceof Error ? geminiError.message : 'Unknown'}. OpenAI Error: ${openAIError instanceof Error ? openAIError.message : 'Unknown'}`;
-            throw new Error(`AI services failed. ${errorMessage}`);
-        }
+    } catch (error) {
+        console.error("[GeminiService] AI JSON generation failed:", error);
+        throw new Error(`AI service failed to generate a valid JSON response. Details: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
 
+/**
+ * Generates a plain text response from the Gemini API.
+ * @param prompt The text prompt to send to the model.
+ * @param config Optional generation configuration.
+ * @returns A string containing the model's response.
+ */
 const generateText = async (prompt: string, config: any = {}) => {
     try {
-        // First, try Gemini
-        const response = await invokeGeminiProxy('generateContent', {
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: config,
         });
         return response.text;
-    } catch (geminiError) {
-        console.warn("[GeminiService] Gemini text generation failed, attempting fallback to OpenAI.", geminiError);
-        // Fallback to OpenAI
-        try {
-            const response = await invokeOpenAIProxy({
-                model: 'gpt-4o-mini',
-                prompt: prompt,
-            });
-            return response.text;
-        } catch (openAIError) {
-            console.error("[GeminiService] OpenAI fallback for text generation also failed:", openAIError);
-            const errorMessage = `Gemini Error: ${geminiError instanceof Error ? geminiError.message : 'Unknown'}. OpenAI Error: ${openAIError instanceof Error ? openAIError.message : 'Unknown'}`;
-            throw new Error(`AI text generation failed. ${errorMessage}`);
-        }
+    } catch (error) {
+        console.error("[GeminiService] AI text generation failed:", error);
+        throw new Error(`AI service failed to generate text. Details: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
+
 
 // --- JSON Schema Definitions for AI ---
 const RECIPE_SCHEMA = {
@@ -257,7 +156,7 @@ const PLACEHOLDER_IMAGE_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDo
 
 const generateProductImage = async (productName: string): Promise<string> => {
     try {
-        const response = await invokeGeminiProxy('generateImages', {
+        const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
             prompt: `A professional, clean product photograph of "${productName}" for an e-commerce website, on a plain white background.`,
             config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
@@ -383,7 +282,23 @@ export const getDashboardSuggestions = async (reminders: Reminder[]): Promise<{ 
         responseSchema: schema
     };
 
-    const result = await generateAndParseJson(prompt, config);
+    let result;
+    try {
+        result = await generateAndParseJson(prompt, config);
+    } catch (error) {
+        console.error('[GeminiService] getDashboardSuggestions: Failed to get AI suggestions:', error);
+        // Return a default, empty state to prevent app crash
+        return { dailyBriefing: "Couldn't load suggestions, but have a great day!", suggestions: [] };
+    }
+
+    if (!result || !Array.isArray(result.suggestions)) {
+        console.warn('[GeminiService] getDashboardSuggestions: AI response did not contain a valid `suggestions` array.', result);
+        return {
+            dailyBriefing: result?.dailyBriefing || "Couldn't load suggestions, but have a great day!",
+            suggestions: []
+        };
+    }
+
     const suggestionsWithDates = result.suggestions.map((s: any) => ({
         ...s,
         date: new Date(s.date)

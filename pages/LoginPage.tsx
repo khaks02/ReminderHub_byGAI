@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
@@ -76,7 +74,7 @@ const LoginPage: React.FC = () => {
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-primary">myreminder</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2">
-                        {isSignUp ? 'Create your account' : 'Admin Test Login'}
+                        {isSignUp ? 'Create your account' : 'Sign In'}
                     </p>
                 </div>
 

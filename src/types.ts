@@ -9,7 +9,7 @@ export interface User {
 export interface UserPreferences {
     user_id: string;
     recipe_vegetarian_only: boolean;
-    notification_settings?: any;
+    notification_settings?: Record<string, unknown>;
     has_completed_tutorial?: boolean;
 }
 

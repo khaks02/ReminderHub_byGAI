@@ -87,7 +87,6 @@ const AnalyticsPage: React.FC = () => {
             let category: string | null = null;
             let value = 0;
 
-            // FIX: Removed invalid `CartItemType.SERVICE` case which was causing multiple type errors.
             switch (item.type) {
                 case CartItemType.PREPARED_DISH:
                     category = item.vendor || 'Restaurant Order';

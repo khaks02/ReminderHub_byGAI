@@ -1,7 +1,5 @@
-
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo } from 'react';
-import { Reminder, Service, CartItem, AppContextType, CartItemType, ServiceCartItem, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder, UserPreferences, FollowUpReminder } from '../types';
+import { Reminder, CartItem, AppContextType, CartItemType, PreparedDishCartItem, Recipe, ReminderType, RecurrenceRule, Order, VendorProductCartItem, AutoReminder, UserPreferences, FollowUpReminder } from '../types';
 import { scheduleNotificationsForReminder, cancelNotificationsForReminder, requestNotificationPermission } from '../services/notificationService';
 import { extractFollowUpReminder } from '../services/geminiService';
 import { useAuth } from './useAuthContext';
@@ -266,10 +264,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
 
 
-    const addToCart = (itemToAdd: Service | CartItem) => {
-        let newCartItem: CartItem;
-        if ('provider' in itemToAdd) { newCartItem = { id: `cart-${Date.now()}`, type: CartItemType.SERVICE, item: itemToAdd, quantity: 1 }; } 
-        else { newCartItem = { ...itemToAdd, id: itemToAdd.id || `cart-${Date.now()}` }; }
+    const addToCart = (itemToAdd: CartItem) => {
+        const newCartItem = { ...itemToAdd, id: itemToAdd.id || `cart-${Date.now()}` };
 
         setCart(prevCart => {
             if (USE_MOCK_DATA) {
@@ -282,9 +278,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             } else if (newCartItem.type === CartItemType.VENDOR_PRODUCT) {
                  const existing = prevCart.find(i => i.type === CartItemType.VENDOR_PRODUCT && i.productName === newCartItem.productName && i.vendor === newCartItem.vendor) as VendorProductCartItem | undefined;
                  if (existing) { return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as VendorProductCartItem).quantity + 1 } : i); }
-            } else if (newCartItem.type === CartItemType.SERVICE) {
-                const existing = prevCart.find(i => i.type === CartItemType.SERVICE && i.item.id === newCartItem.item.id) as ServiceCartItem | undefined;
-                 if (existing) { return prevCart.map(i => i.id === existing.id ? { ...i, quantity: (i as ServiceCartItem).quantity + 1 } : i); }
             }
             return [...prevCart, newCartItem];
         });
@@ -348,7 +341,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const total = cart.reduce((acc, item) => {
             let itemPrice = 0;
             switch (item.type) {
-                case CartItemType.SERVICE: itemPrice = item.item.price * item.quantity; break;
                 case CartItemType.PREPARED_DISH: itemPrice = item.recipe.price * item.quantity; break;
                 case CartItemType.CHEF_SERVICE: itemPrice = item.price; break;
                 case CartItemType.VENDOR_PRODUCT: itemPrice = item.price * item.quantity; break;

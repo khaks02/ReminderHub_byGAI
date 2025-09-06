@@ -1,12 +1,12 @@
 // IMPORTANT: To run the app in demo mode without a Supabase backend, set USE_MOCK_DATA to true.
-// To connect to your own Supabase instance, set USE_MOCK_DATA to false and configure your credentials
-// in a .env.local file at the project root.
+// To connect to your own Supabase instance, set USE_MOCK_DATA to false and provide credentials via environment variables.
 export const USE_MOCK_DATA = false;
 
-// To connect to a live Supabase backend, set USE_MOCK_DATA to false and fill these in.
-// FIX: Reverted to hardcoded Supabase credentials to resolve TypeScript errors with Vite's environment variables. The project's configuration was unable to find the `vite/client` type definitions, causing compilation to fail.
-export const SUPABASE_URL: string = 'https://slzekgelvrigylhbdrvb.supabase.co';
-export const SUPABASE_ANON_KEY: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsemVrZ2VsdnJpZ3lsaGJkcnZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyNDEwNDQsImV4cCI6MjA3MTgxNzA0NH0.pacfIlDCNE2Sc2SsI-cIWNO3kv_npixNSRjENHwLP0Q';
+// To connect to a live Supabase backend, set USE_MOCK_DATA to false and ensure these environment variables are configured.
+// The platform's execution environment is expected to provide these variables.
+// Note: Using `process.env` is based on the platform's requirement for the Gemini API key.
+export const SUPABASE_URL: string = (process.env.SUPABASE_URL as string) || 'YOUR_SUPABASE_URL';
+export const SUPABASE_ANON_KEY: string = (process.env.SUPABASE_ANON_KEY as string) || 'YOUR_SUPABASE_ANON_KEY';
 
 
 /**
@@ -14,6 +14,6 @@ export const SUPABASE_ANON_KEY: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e
  * @returns {boolean} True if in mock mode or if Supabase credentials are provided.
  */
 export const isSupabaseConfigured = () => {
-    if (USE_MOCK_DATA) return true;
-    return SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+    // Check if the variables were successfully loaded from the environment and are not the placeholder strings.
+    return USE_MOCK_DATA || (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY');
 };

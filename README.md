@@ -2,19 +2,15 @@
 
 myreminder is a modern, responsive web application that acts as a personal AI assistant. It leverages the power of Google's Gemini API to help users manage reminders, discover recipes, and get service recommendations through a natural language interface. The app is built with React, TypeScript, and Supabase for backend services, using a Vite build process.
 
-To enhance reliability, the app features an automatic fallback to OpenAI's GPT model if the Gemini API is unavailable.
-
 By default, this app can run in a **Demo Mode** with mock data, allowing you to explore all features immediately without any backend setup.
 
 ## ✨ Features
 
 - **AI-Powered Reminders**: Create reminders by typing naturally (e.g., "Pay electricity bill next Tuesday at 8 PM").
-- **Reliable AI with Fallback**: Automatically switches from Gemini to OpenAI if the primary service is down, ensuring high availability.
 - **Intelligent Actions**: Each reminder comes with AI-suggested actions, like finding gift vendors for a birthday or booking services for an appointment.
 - **Recipe Discovery**: Get daily, AI-curated meal plans, search for recipes by name, or find recipes based on ingredients.
 - **Service Integration**: For any recipe, get AI suggestions for vendors to buy ingredients, order the prepared dish, or hire a professional chef.
 - **Calendar View**: A full-featured calendar to visualize all your reminders.
-- **Secure API Calls**: All communication with the AI is proxied through a secure Supabase Edge Function, ensuring API keys are never exposed on the client.
 - **User Authentication**: Secure user login and profile management powered by Supabase Auth.
 - **Light & Dark Mode**: Themed for your viewing preference.
 - **Credential-Free Demo Mode**: Can be run with sample data, no setup required.
@@ -22,8 +18,8 @@ By default, this app can run in a **Demo Mode** with mock data, allowing you to 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
-- **AI**: Google Gemini API & OpenAI GPT (via Supabase Edge Functions)
-- **Backend-as-a-Service**: Supabase (Authentication, PostgreSQL Database, Storage, Edge Functions)
+- **AI**: Google Gemini API
+- **Backend-as-a-Service**: Supabase (Authentication, PostgreSQL Database, Storage)
 - **Routing**: React Router
 - **Icons**: Lucide React
 - **Deployment**: Firebase Hosting
@@ -37,7 +33,6 @@ To connect the application to your own live backend, follow these instructions.
 You will need accounts with the following services:
 - [Supabase](https://supabase.com/) (for backend and database)
 - [Google AI Studio](https://aistudio.google.com/) (to get a Gemini API Key)
-- [OpenAI](https://platform.openai.com/signup) (to get an API Key for fallback)
 - [Firebase](https://firebase.google.com/) (for hosting)
 - [Node.js](https://nodejs.org/) and [Supabase CLI](https://supabase.com/docs/guides/cli) installed on your machine.
 
@@ -60,34 +55,17 @@ You will need accounts with the following services:
       supabase login
       supabase link --project-ref YOUR_PROJECT_REF
       ```
-    - **Crucially, set your AI API keys as secrets** in your Supabase project. This keeps them secure.
-      ```bash
-      supabase secrets set GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-      supabase secrets set OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-      ```
-    - Deploy the Edge Functions. These functions handle all communication with the AI securely.
-      ```bash
-      supabase functions deploy gemini-proxy
-      supabase functions deploy openai-proxy
-      ```
-
-4.  **Set up the Database Schema:**
-    - A schema file is provided in `supabase/migrations`. Push this to your Supabase project to create all the necessary tables and policies.
+    - Push the database schema to your project.
       ```bash
       supabase db push
       ```
 
-5.  **Configure Frontend Credentials:**
-    - Create a `.env.local` file in the project root.
-    - Add your Supabase credentials to this file. Vite will automatically load these variables for local development.
-    ```
-    # in .env.local
-    VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-    VITE_SUPABASE_ANON_KEY=your-public-anon-key
-    ```
-    - Open the `src/config.ts` file and set `USE_MOCK_DATA` to `false`. The app is now configured to read your credentials from the environment variables.
+4.  **Configure Frontend Credentials:**
+    - **Supabase Credentials**: Open the `src/config.ts` file and replace the placeholder `SUPABASE_URL` and `SUPABASE_ANON_KEY` with your project's credentials.
+    - **Gemini API Key**: The application expects the Gemini API key to be available in the execution environment as `process.env.API_KEY`. You must configure your deployment environment to provide this variable.
+    - In `src/config.ts`, ensure `USE_MOCK_DATA` is set to `false`.
 
-6.  **Run the application locally:**
+5.  **Run the application locally:**
     ```bash
     npm run dev
     ```

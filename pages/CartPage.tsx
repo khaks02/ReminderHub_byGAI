@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, ConciergeBell } from 'lucide-react';
-import { CartItem, CartItemType, ServiceCartItem, PreparedDishCartItem, VendorProductCartItem } from '../types';
+import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket } from 'lucide-react';
+import { CartItem, CartItemType, PreparedDishCartItem, VendorProductCartItem } from '../types';
 import * as ReactRouterDOM from 'react-router-dom';
 
 const VendorSelector: React.FC<{ vendors: string[]; selectedVendor?: string; onSelect: (vendor: string) => void; }> = ({ vendors, selectedVendor, onSelect }) => {
@@ -30,8 +29,6 @@ const CartPage: React.FC = () => {
 
     const subtotal = cart.reduce((acc, item) => {
         switch (item.type) {
-            case CartItemType.SERVICE:
-                return acc + item.item.price * item.quantity;
             case CartItemType.PREPARED_DISH:
                 return acc + item.recipe.price * item.quantity;
             case CartItemType.CHEF_SERVICE:
@@ -49,7 +46,7 @@ const CartPage: React.FC = () => {
     const taxes = subtotal * 0.1;
     const total = subtotal + taxes;
     
-    const updateQuantity = (item: ServiceCartItem | PreparedDishCartItem | VendorProductCartItem, delta: number) => {
+    const updateQuantity = (item: PreparedDishCartItem | VendorProductCartItem, delta: number) => {
         const newQuantity = item.quantity + delta;
         if (newQuantity > 0) {
             updateCartItem(item.id, { ...item, quantity: newQuantity });
@@ -67,13 +64,6 @@ const CartPage: React.FC = () => {
         let icon, title, description, price, quantityControls;
 
         switch (item.type) {
-            case CartItemType.SERVICE:
-                icon = <ConciergeBell className="w-10 h-10 text-primary flex-shrink-0"/>;
-                title = item.item.name;
-                description = <p className="text-sm text-gray-500 dark:text-gray-400">{item.item.provider}</p>;
-                price = item.item.price;
-                quantityControls = true;
-                break;
             case CartItemType.PREPARED_DISH:
                 icon = <Sandwich className="w-10 h-10 text-orange-500 flex-shrink-0"/>;
                 title = item.recipe.name;
@@ -112,7 +102,7 @@ const CartPage: React.FC = () => {
                 return null;
         }
         
-        const itemWithQuantity = (item.type === CartItemType.SERVICE || item.type === CartItemType.PREPARED_DISH || item.type === CartItemType.VENDOR_PRODUCT) ? item : null;
+        const itemWithQuantity = (item.type === CartItemType.PREPARED_DISH || item.type === CartItemType.VENDOR_PRODUCT) ? item : null;
 
         return (
              <div className="flex items-start justify-between">

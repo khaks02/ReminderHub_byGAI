@@ -1,7 +1,3 @@
-
-
-
-
 export interface User {
     id: string;
     name: string;
@@ -13,7 +9,7 @@ export interface User {
 export interface UserPreferences {
     user_id: string;
     recipe_vegetarian_only: boolean;
-    notification_settings?: any;
+    notification_settings?: Record<string, unknown>; // Or a more specific type if structure is known
     has_completed_tutorial?: boolean;
 }
 
@@ -40,29 +36,6 @@ export interface Reminder {
 
 export interface AutoReminder extends Reminder {
     source: AutoReminderSource;
-}
-
-
-// The old Service type is being replaced by a more dynamic recommendation system.
-// It is kept here for now to avoid breaking existing cart logic but is considered deprecated.
-export interface Service {
-    id:string;
-    name: string;
-    description: string;
-    provider: string;
-    price: number;
-}
-
-// Deprecated in favor of the new ActivityRecommendation flow
-export interface ProductRecommendation {
-    productName: string;
-    vendorName: string;
-    price: number;
-}
-// Deprecated in favor of the new ActivityRecommendation flow
-export interface ServiceRecommendation {
-    category: string;
-    products: ProductRecommendation[];
 }
 
 export interface VendorSuggestion {
@@ -109,7 +82,6 @@ export interface DailyRecommendationResponse {
 }
 
 export enum CartItemType {
-    SERVICE = 'SERVICE',
     PREPARED_DISH = 'PREPARED_DISH',
     INGREDIENTS_LIST = 'INGREDIENTS_LIST',
     CHEF_SERVICE = 'CHEF_SERVICE',
@@ -121,12 +93,6 @@ interface CartItemBase {
     type: CartItemType;
     reminderId?: string;
     reminderTitle?: string;
-}
-
-export interface ServiceCartItem extends CartItemBase {
-    type: CartItemType.SERVICE;
-    item: Service;
-    quantity: number;
 }
 
 export interface PreparedDishCartItem extends CartItemBase {
@@ -159,7 +125,7 @@ export interface VendorProductCartItem extends CartItemBase {
 }
 
 
-export type CartItem = ServiceCartItem | PreparedDishCartItem | IngredientsCartItem | ChefServiceCartItem | VendorProductCartItem;
+export type CartItem = PreparedDishCartItem | IngredientsCartItem | ChefServiceCartItem | VendorProductCartItem;
 
 export interface FollowUpReminder {
     title: string;
@@ -187,7 +153,7 @@ export type AppContextType = {
     addReminderType: (type: ReminderType) => void;
     cart: CartItem[];
     cartCount: number;
-    addToCart: (item: Service | CartItem) => void;
+    addToCart: (item: CartItem) => void;
     removeFromCart: (itemId: string) => void;
     clearCart: () => void;
     updateCartItem: (itemId: string, updates: Partial<CartItem>) => void;

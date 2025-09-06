@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, ConciergeBell, Package, Link, Headset, CalendarPlus } from 'lucide-react';
+import { ShoppingBag, ChefHat, Sandwich, ShoppingBasket, Package, Link, Headset, CalendarPlus } from 'lucide-react';
 import { CartItem, CartItemType } from '../types';
 
 const OrdersPage: React.FC = () => {
@@ -8,8 +8,6 @@ const OrdersPage: React.FC = () => {
 
     const getItemIcon = (item: CartItem) => {
         switch (item.type) {
-            case CartItemType.SERVICE:
-                return <ConciergeBell className="w-5 h-5 text-primary"/>;
             case CartItemType.PREPARED_DISH:
                 return <Sandwich className="w-5 h-5 text-orange-500"/>;
             case CartItemType.INGREDIENTS_LIST:
@@ -25,8 +23,6 @@ const OrdersPage: React.FC = () => {
 
     const getItemName = (item: CartItem) => {
         switch (item.type) {
-            case CartItemType.SERVICE:
-                return item.item.name;
             case CartItemType.PREPARED_DISH:
                 return item.recipe.name;
             case CartItemType.INGREDIENTS_LIST:

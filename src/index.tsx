@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css';
 
 // Re-enabled the service worker registration to restore notification functionality.
 window.addEventListener('load', () => {

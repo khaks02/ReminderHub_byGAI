@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
@@ -93,6 +92,17 @@ const MainAppLayout = () => {
   
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  // Helper component for user menu items
+  const UserMenuItem = ({ to, icon, children, onClick }: { to: string; icon: React.ReactNode; children: React.ReactNode; onClick?: () => void }) => (
+    <ReactRouterDOM.NavLink
+      to={to}
+      onClick={onClick ? () => { setIsUserMenuOpen(false); onClick(); } : () => setIsUserMenuOpen(false)}
+      className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+    >
+      {icon} {children}
+    </ReactRouterDOM.NavLink>
+  );
+
   useEffect(() => {
     // Show onboarding if preferences are loaded and the tutorial hasn't been completed.
     if (preferences && !preferences.has_completed_tutorial) {
@@ -115,7 +125,7 @@ const MainAppLayout = () => {
 
   const handleLogout = async () => {
       await logout();
-      navigate('/admin-login');
+      navigate('/login');
   };
 
   const handleFinishOnboarding = () => {
@@ -180,27 +190,9 @@ const MainAppLayout = () => {
                         </button>
                         {isUserMenuOpen && (
                              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-md shadow-lg z-20 border border-gray-200 dark:border-slate-700 py-1">
-                                <ReactRouterDOM.NavLink 
-                                    to="/profile" 
-                                    onClick={() => setIsUserMenuOpen(false)}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    <User size={16}/> My Profile
-                                </ReactRouterDOM.NavLink>
-                                 <ReactRouterDOM.NavLink 
-                                    to="/analytics" 
-                                    onClick={() => setIsUserMenuOpen(false)}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    <BarChart2 size={16}/> Analytics
-                                </ReactRouterDOM.NavLink>
-                                 <ReactRouterDOM.NavLink 
-                                    to="/settings" 
-                                    onClick={() => setIsUserMenuOpen(false)}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    <Settings size={16}/> Settings
-                                </ReactRouterDOM.NavLink>
+                                <UserMenuItem to="/profile" icon={<User size={16}/>}>My Profile</UserMenuItem>
+                                <UserMenuItem to="/analytics" icon={<BarChart2 size={16}/>}>Analytics</UserMenuItem>
+                                <UserMenuItem to="/settings" icon={<Settings size={16}/>}>Settings</UserMenuItem>
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
                                 <ThemeToggle inMenu={true} />
                                 <div className="border-t border-gray-100 dark:border-slate-700 my-1"></div>
@@ -259,7 +251,7 @@ const AppRoutes = () => {
     
     return (
         <ReactRouterDOM.Routes>
-            <ReactRouterDOM.Route path="/admin-login" element={<LoginPage />} />
+            <ReactRouterDOM.Route path="/login" element={<LoginPage />} />
             <ReactRouterDOM.Route 
                 path="/*"
                 element={

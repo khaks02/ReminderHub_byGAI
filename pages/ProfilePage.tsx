@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User, Mail, Phone, MapPin, MessageSquare, Edit, Package, Info, Heart, Utensils, LogOut } from 'lucide-react';
 import { useAppContext } from '../hooks/useAppContext';
@@ -114,7 +113,7 @@ const ProfilePage: React.FC = () => {
 
     const handleLogout = async () => {
         await logout();
-        navigate('/admin-login');
+        navigate('/login');
     };
 
     return (

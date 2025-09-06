@@ -11,8 +11,8 @@ interface OnboardingModalProps {
 
 const steps = [
     {
-        icon: <img src="https://api.dicebear.com/8.x/bottts-neutral/svg?seed=ReminderHub" alt="App Mascot" className="w-24 h-24 mx-auto mb-4" />,
-        title: "Welcome to ReminderHub AI!",
+        icon: <img src="https://api.dicebear.com/8.x/bottts-neutral/svg?seed=myreminder" alt="App Mascot" className="w-24 h-24 mx-auto mb-4" />,
+        title: "Welcome to myreminder!",
         description: "Let's take a quick tour to see how you can supercharge your productivity."
     },
     {
@@ -38,7 +38,7 @@ const steps = [
     {
         icon: <CheckCircle size={64} className="text-green-500" />,
         title: "You're All Set!",
-        description: "You're ready to explore. Enjoy your smarter, more organized day with ReminderHub AI."
+        description: "You're ready to explore. Enjoy your smarter, more organized day with myreminder."
     }
 ];
 
