@@ -8,20 +8,18 @@ const ConfigurationErrorPage: React.FC = () => {
                 <AlertTriangle className="mx-auto w-16 h-16 text-red-500 mb-6" />
                 <h1 className="text-3xl font-bold text-red-600 dark:text-red-400 mb-4">Configuration Required</h1>
                 <p className="text-lg text-slate-600 dark:text-slate-300 mb-6">
-                    This application requires Supabase credentials to function correctly.
+                    This application requires Supabase credentials to be set as environment variables.
                 </p>
                 <div className="text-left bg-slate-100 dark:bg-slate-900 p-6 rounded-lg font-mono text-sm text-slate-700 dark:text-slate-200">
-                    <p className="mb-4">Please edit the <strong className="text-primary dark:text-primary-light">`config.ts`</strong> file in the project root and replace the placeholder values with your actual Supabase URL and Anon Key.</p>
-                    <pre className="whitespace-pre-wrap">
-                        <code>
-                            <span className="text-slate-500">// in config.ts</span><br />
-                            export const SUPABASE_URL = <span className="text-orange-500">'YOUR_SUPABASE_URL'</span>;<br />
-                            export const SUPABASE_ANON_KEY = <span className="text-orange-500">'YOUR_SUPABASE_ANON_KEY'</span>;
-                        </code>
-                    </pre>
+                    <p className="mb-4">For local development, create a <strong className="text-primary dark:text-primary-light">`.env`</strong> file in the project root and add your credentials:</p>
+                    <pre className="whitespace-pre-wrap p-3 bg-slate-200 dark:bg-slate-800 rounded-md"><code>
+                        VITE_SUPABASE_URL=<span className="text-orange-500">"YOUR_SUPABASE_URL"</span><br />
+                        VITE_SUPABASE_ANON_KEY=<span className="text-orange-500">"YOUR_SUPABASE_ANON_KEY"</span>
+                    </code></pre>
+                    <p className="mt-4">For production, ensure these variables are set in your deployment environment.</p>
                 </div>
                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-6">
-                    You can find these credentials in your Supabase project's API settings.
+                    Alternatively, you can enable demo mode by setting <code className="text-primary dark:text-primary-light">USE_MOCK_DATA = true</code> in the <strong>`src/config.ts`</strong> file.
                 </p>
             </div>
         </div>

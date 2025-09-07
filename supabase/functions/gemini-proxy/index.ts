@@ -1,6 +1,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { GoogleGenAI } from "https://esm.sh/@google/genai@0.25.0";
+// FIX: Update @google/genai import to a compatible version for Deno.
+import { GoogleGenAI } from "https://esm.sh/@google/genai@0.14.0";
 
 // This declares the Deno environment for type checking.
 declare const Deno: any;
@@ -26,6 +27,7 @@ serve(async (req: Request) => {
     if (!GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY environment variable not set in Supabase secrets.");
     }
+    // FIX: Initialize the GoogleGenAI client with a named apiKey parameter.
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     const { type, payload } = await req.json();

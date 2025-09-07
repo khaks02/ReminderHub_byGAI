@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { Trash2, ShoppingBag, Minus, Plus, ChefHat, Sandwich, ShoppingBasket, Package } from 'lucide-react';
 import { CartItem, CartItemType, PreparedDishCartItem, VendorProductCartItem } from '../types';
-import * as ReactRouterDOM from 'react-router-dom';
+// FIX: Switched to named imports for react-router-dom to resolve type errors.
+import { NavLink } from 'react-router-dom';
 
 const VendorSelector: React.FC<{ vendors: string[]; selectedVendor?: string; onSelect: (vendor: string) => void; }> = ({ vendors, selectedVendor, onSelect }) => {
     if (!vendors || vendors.length === 0) return <p className="text-xs text-gray-500 mt-1">No vendors available.</p>;
@@ -135,9 +136,9 @@ const CartPage: React.FC = () => {
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Thank you for your order!</h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">Your purchase has been completed and you can view the details in your order history.</p>
                 <div className="mt-6">
-                    <ReactRouterDOM.NavLink to="/orders" className="bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-dark transition-colors">
+                    <NavLink to="/orders" className="bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-dark transition-colors">
                         View My Orders
-                    </ReactRouterDOM.NavLink>
+                    </NavLink>
                 </div>
             </div>
         );

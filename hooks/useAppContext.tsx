@@ -58,16 +58,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
 
         if (userId) {
-            // FIX: Add a guard to ensure the Supabase client is available before proceeding.
-            // This satisfies TypeScript's type checker when mock data mode might make the client null.
-            if (!supabase) {
-                console.error("[AppContext] Supabase client is not available.");
-                setLoadingData(false);
-                return;
-            }
-            setLoadingData(true);
-            
             const fetchData = async () => {
+                // FIX: Add a guard to ensure the Supabase client is available. This allows TypeScript to correctly infer types within this async scope.
+                if (!supabase) {
+                    console.error("[AppContext] Supabase client is not available.");
+                    setLoadingData(false);
+                    return;
+                }
+                setLoadingData(true);
+                
                 try {
                     const [remindersRes, typesRes, ordersRes, savedRecipesRes, cartRes, preferencesRes] = await Promise.all([
                         supabase.from('reminders').select('*').eq('user_id', userId),
@@ -93,12 +92,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                     setSavedRecipes((savedRecipesRes.data || []).map((r: any) => r.recipe_data as Recipe));
 
                     if (cartRes.error && cartRes.error.code !== 'PGRST116') throw cartRes.error; // Ignore "no rows" error
-                    // FIX: Explicitly handle the case where cart items might be null.
-                    setCart((cartRes.data?.items as CartItem[] | null) ?? []);
+                    // FIX: Explicitly handle the case where cartRes.data might be null to prevent runtime errors.
+                    setCart(cartRes.data ? (cartRes.data.items as CartItem[] | null) ?? [] : []);
                     
                     if (preferencesRes.error && preferencesRes.error.code !== 'PGRST116') throw preferencesRes.error;
                     if (!preferencesRes.data) {
-                        // FIX: Ensure Supabase client type is correctly inferred.
+                        // FIX: With the supabase guard in place, type inference works correctly for this insert operation.
                         const { data: newPreferences, error: newPrefError } = await supabase.from('user_preferences').insert({ user_id: userId }).select().single();
                         if (newPrefError) throw newPrefError;
                         setPreferences(newPreferences);
@@ -113,20 +112,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             };
             fetchData();
             
-            const channel = supabase.channel(`public:reminders:user_id=eq.${userId}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, async () => {
-                     const { data, error } = await supabase.from('reminders').select('*').eq('user_id', userId);
-                     if (error) console.error('[AppContext] Realtime error refetching reminders:', error);
-                     else {
-                         const updatedReminders = (data || []).map((r: any) => ({ ...r, date: new Date(r.date) }));
-                         setReminders(updatedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
-                     }
-                })
-                .subscribe();
+            // FIX: Add guard for Supabase client before creating a subscription channel.
+            if (supabase) {
+                const channel = supabase.channel(`public:reminders:user_id=eq.${userId}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, async () => {
+                        // FIX: Add a guard inside the async callback as well for type safety.
+                        if (!supabase) return;
+                         const { data, error } = await supabase.from('reminders').select('*').eq('user_id', userId);
+                         if (error) console.error('[AppContext] Realtime error refetching reminders:', error);
+                         else {
+                             const updatedReminders = (data || []).map((r: any) => ({ ...r, date: new Date(r.date) }));
+                             setReminders(updatedReminders.sort((a, b) => a.date.getTime() - b.date.getTime()));
+                         }
+                    })
+                    .subscribe();
 
-            return () => {
-                supabase.removeChannel(channel);
-            };
+                return () => {
+                    supabase.removeChannel(channel);
+                };
+            }
 
         } else {
             setReminders([]); setCart([]); setReminderTypes([]); setOrders([]); setSavedRecipes([]); setPreferences(null);
@@ -137,13 +141,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     // This effect handles saving the cart state, but only in live mode.
     useEffect(() => {
         if (USE_MOCK_DATA) return;
-        // FIX: Add a guard to ensure the Supabase client is available.
-        if (!supabase) return;
-
+        
         if (userId && !loadingData) {
             const saveCart = async () => {
-                // FIX: Ensure Supabase client type is correctly inferred.
-                const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart as unknown as Json }, { onConflict: 'user_id' });
+                // FIX: Add a guard to ensure the Supabase client is available within the async scope.
+                if (!supabase) return;
+                // FIX: With the supabase guard in place, type inference works correctly for this upsert operation.
+                const { error } = await supabase.from('cart').upsert({ user_id: userId, items: cart as unknown as Json });
                 if (error) console.error('[AppContext] Error saving cart to Supabase:', (error as any).message || error);
             };
             saveCart();
@@ -171,14 +175,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!userId || !supabase) throw new Error("User not authenticated.");
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing from the guard, this insert operation is now correctly typed.
         const { data, error } = await supabase.from('reminders').insert({ ...reminder, user_id: userId, date: reminder.date.toISOString() }).select().single();
         if (error) throw new Error(`Failed to add reminder: ${error.message}`);
         if (!data) throw new Error('Failed to add reminder: no data returned.');
-        // FIX: Ensure Supabase client type is correctly inferred.
-        scheduleNotificationsForReminder({ ...(data as any), date: new Date(data.date) });
+        // FIX: The `data` object is now correctly typed, so we can pass it to the notification scheduler.
+        scheduleNotificationsForReminder({ ...data, date: new Date(data.date) } as Reminder);
     };
 
     const deleteReminder = async (id: string) => {
@@ -189,7 +192,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!userId || !supabase) return;
         const { error } = await supabase.from('reminders').delete().eq('id', id).eq('user_id', userId);
         if (error) { console.error('[AppContext] Error deleting reminder:', error); }
@@ -203,16 +205,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!userId || !supabase) throw new Error("User not authenticated.");
         const { date, ...restUpdates } = updates;
         const dbUpdates = { ...restUpdates, ...(date && { date: date.toISOString() }) };
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing, this update operation is now correctly typed.
         const { data, error } = await supabase.from('reminders').update(dbUpdates).eq('id', id).eq('user_id', userId).select().single();
         if (error) throw new Error(`Failed to update reminder: ${error.message}`);
         if (!data) throw new Error('Failed to update reminder: no data returned.');
-        // FIX: Ensure Supabase client type is correctly inferred.
-        scheduleNotificationsForReminder({ ...(data as any), date: new Date(data.date) });
+        // FIX: The `data` object is now correctly typed.
+        scheduleNotificationsForReminder({ ...data, date: new Date(data.date) } as Reminder);
     };
 
     const completeReminder = (id: string) => {
@@ -235,9 +236,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setReminderTypes(prev => [...prev, trimmedType].sort());
 
         if (USE_MOCK_DATA) return;
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!userId || !supabase) return;
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing, this insert operation is now correctly typed.
         const { error } = await supabase.from('reminder_types').insert({ user_id: userId, name: trimmedType });
         if (error) console.error('[AppContext] Error saving new reminder type to Supabase:', error);
     };
@@ -315,10 +315,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                     });
                 } catch (err) { console.error("[AppContext] Failed to add follow-up reminder:", err); }
             }
-            // FIX: Add a guard to ensure the Supabase client is available.
             if (USE_MOCK_DATA || !supabase) return;
             const serializableFollowUps = validFollowUps.map(f => ({ ...f, date: f.date.toISOString() }));
-            // FIX: Ensure Supabase client type is correctly inferred.
+            // FIX: With proper type narrowing, this update operation is now correctly typed.
             const { error } = await supabase.from('orders').update({ followUpReminders: serializableFollowUps as unknown as Json }).eq('id', order.id);
             if(error) console.error("[AppContext] Error updating order with follow-up reminders:", error);
         }
@@ -335,7 +334,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             analyzeOrderForFollowUps(newOrder as Order);
             return;
         }
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!supabase) return;
 
         const total = cart.reduce((acc, item) => {
@@ -344,6 +342,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 case CartItemType.PREPARED_DISH: itemPrice = item.recipe.price * item.quantity; break;
                 case CartItemType.CHEF_SERVICE: itemPrice = item.price; break;
                 case CartItemType.VENDOR_PRODUCT: itemPrice = item.price * item.quantity; break;
+                case CartItemType.INGREDIENTS_LIST: itemPrice = 0; break;
             }
             return acc + itemPrice;
         }, 0);
@@ -353,11 +352,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             reminderTitle: firstItemWithReminder?.reminderTitle, user_id: currentUser.id
         };
         
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing, this insert operation is now correctly typed.
         const { data, error } = await supabase.from('orders').insert({ ...newOrder, date: newOrder.date.toISOString(), items: newOrder.items as unknown as Json }).select().single();
         if (error || !data) { console.error('[AppContext] Error creating order:', error); return; }
         
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: The `data` object is now correctly typed.
         const createdOrder: Order = { ...(data as any), date: new Date(data.date) };
         setOrders(prev => [createdOrder, ...prev]);
         clearCart();
@@ -368,9 +367,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (!currentUser || savedRecipes.some(r => r.id === recipe.id)) return;
         setSavedRecipes(prev => [recipe, ...prev]);
         if (USE_MOCK_DATA) { mockDataService.saveRecipe(recipe); return; }
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!supabase) return;
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing, this insert operation is now correctly typed.
         const { error } = await supabase.from('saved_recipes').insert({ user_id: currentUser.id, recipe_id: recipe.id, recipe_data: recipe as unknown as Json });
         if (error) console.error('[AppContext] Error saving recipe:', error);
     };
@@ -379,7 +377,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (!currentUser) return;
         setSavedRecipes(prev => prev.filter(r => r.id !== recipeId));
         if (USE_MOCK_DATA) { mockDataService.unsaveRecipe(recipeId); return; }
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!supabase) return;
         const { error } = await supabase.from('saved_recipes').delete().eq('user_id', currentUser.id).eq('recipe_id', recipeId);
         if (error) console.error('[AppContext] Error unsaving recipe:', error);
@@ -390,9 +387,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const updatedPrefs = { ...preferences, ...updates };
         setPreferences(updatedPrefs);
         if (USE_MOCK_DATA) { mockDataService.updatePreferences(updates); return; }
-        // FIX: Add a guard to ensure the Supabase client is available.
         if (!supabase) return;
-        // FIX: Ensure Supabase client type is correctly inferred.
+        // FIX: With proper type narrowing, this upsert operation is now correctly typed.
         const { data, error } = await supabase.from('user_preferences').upsert(updatedPrefs).select().single();
         if (error) console.error('[AppContext] Error updating preferences:', error);
         else setPreferences(data);

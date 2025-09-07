@@ -1,10 +1,9 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Per user request, the service worker registration has been disabled to
-// bypass the "invalid document state" error for now.
-/*
+// Re-enabled the service worker registration to restore notification functionality.
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
     // In certain sandboxed or iframe-based environments, relative paths for service
@@ -21,7 +20,7 @@ window.addEventListener('load', () => {
       });
   }
 });
-*/
+
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

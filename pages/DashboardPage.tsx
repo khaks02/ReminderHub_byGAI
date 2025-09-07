@@ -1,7 +1,7 @@
 
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
+import { useAuth } from '../hooks/useAuthContext';
 import { analyzeReminder, getHolidays, getDashboardSuggestions } from '../services/geminiService';
 import ReminderCard from '../components/ReminderCard';
 import ChatInput from '../components/ChatInput';
@@ -9,11 +9,12 @@ import Toast from '../components/Toast';
 import EditReminderModal from '../components/EditReminderModal';
 import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
-import HolidayImportModal from '../components/HolidayImportModal';
-import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion, Recipe, IngredientsCartItem } from '../types';
-import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, Mail, Facebook, Instagram, DownloadCloud } from 'lucide-react';
-import * as ReactRouterDOM from 'react-router-dom';
+import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion } from '../types';
+import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, DownloadCloud, Utensils, ShoppingCart, Plus } from 'lucide-react';
+// FIX: Switched to named imports for react-router-dom to resolve type errors.
+import { useNavigate } from 'react-router-dom';
 import Spinner from '../components/Spinner';
+import HolidayImportModal from '../components/HolidayImportModal';
 
 // Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
 const toDateKey = (date: Date) => {
@@ -24,7 +25,9 @@ const toDateKey = (date: Date) => {
 };
 
 const DashboardPage: React.FC = () => {
-    const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType, addHolidaysBatch } = useAppContext();
+    const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType, addHolidaysBatch, cartCount } = useAppContext();
+    const { currentUser } = useAuth();
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [reminderModalState, setReminderModalState] = useState<{
@@ -141,7 +144,14 @@ const DashboardPage: React.FC = () => {
             setIsLoading(false);
         }
     }, [selectedDate]);
-
+    
+    const handleOpenCreateModal = () => {
+        setReminderModalState({
+            isOpen: true,
+            mode: 'create',
+            initialData: { date: selectedDate }
+        });
+    };
 
     const handleVendorSelect = (vendor: VendorSuggestion, reminder: Reminder) => {
         setVendorModal({ 
@@ -290,6 +300,13 @@ const DashboardPage: React.FC = () => {
     const handleToggleExpansion = (reminderId: string) => {
         setExpandedReminderId(currentId => (currentId === reminderId ? null : reminderId));
     };
+    
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning';
+        if (hour < 18) return 'Good afternoon';
+        return 'Good evening';
+    };
 
     const renderMonthView = () => {
         const year = currentDate.getFullYear();
@@ -358,6 +375,16 @@ const DashboardPage: React.FC = () => {
         );
     };
 
+    const QuickActionButton = ({ icon, label, onClick, badge }: { icon: React.ReactNode, label: string, onClick: () => void, badge?: number }) => (
+        <button onClick={onClick} className="relative flex flex-col items-center justify-center gap-2 p-4 w-full h-24 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-transparent hover:border-primary dark:hover:border-primary transition-all duration-200 card-lift">
+            <div className="w-10 h-10 bg-primary/10 text-primary flex items-center justify-center rounded-lg">{icon}</div>
+            <span className="text-sm font-semibold">{label}</span>
+            {badge && badge > 0 && (
+                <span className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">{badge}</span>
+            )}
+        </button>
+    );
+
     return (
         <div className="container mx-auto p-4 md:p-8 pb-24 md:pb-8">
              {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -397,17 +424,24 @@ const DashboardPage: React.FC = () => {
                     onAddToCart={handleAddToCartFromVendor}
                 />
             )}
-            <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">Your entire life, neatly organized. Or at least, the parts you tell us about.</p>
+            
+            <div className="mb-8">
+                <h1 className="text-3xl md:text-4xl font-bold text-content-light dark:text-content-dark">{getGreeting()}, {currentUser?.name?.split(' ')[0] || 'User'}!</h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <QuickActionButton icon={<Plus size={20}/>} label="Add Reminder" onClick={handleOpenCreateModal} />
+                <QuickActionButton icon={<Utensils size={20}/>} label="Find Recipes" onClick={() => navigate('/recipes')} />
+                <QuickActionButton icon={<DownloadCloud size={20}/>} label="Import Holidays" onClick={() => setIsHolidayModalOpen(true)} />
+                <QuickActionButton icon={<ShoppingCart size={20}/>} label="View Cart" onClick={() => navigate('/cart')} badge={cartCount} />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-accent-dark card-lift">
                     <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-accent-dark">
                         <h2 className="text-xl font-semibold">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                         <div className="flex items-center gap-2">
-                            <button onClick={() => setIsHolidayModalOpen(true)} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2">
-                                <DownloadCloud size={16} /> <span className="hidden sm:inline">Import Holidays</span>
-                            </button>
                             <button onClick={() => { setCurrentDate(new Date()); setSelectedDate(new Date()); }} className="px-3 py-1 text-sm font-semibold border rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">Today</button>
                             <button onClick={() => handleDateChange(-1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeft/></button>
                             <button onClick={() => handleDateChange(1)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronRight/></button>
@@ -447,11 +481,11 @@ const DashboardPage: React.FC = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-center px-6 rounded-lg border-2 border-dashed border-gray-200 dark:border-accent-dark h-full flex flex-col justify-center items-center">
+                                    <div className="text-center p-6 border-2 border-dashed border-gray-200 dark:border-accent-dark h-full flex flex-col justify-center items-center rounded-lg bg-white dark:bg-slate-800/50">
                                         <Calendar size={40} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Looks like a free day!</h3>
+                                        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">A clear day ahead!</h3>
                                         <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm max-w-xs">
-                                            Use the AI assistant above to add a new reminder for this day.
+                                            Add a new task using the AI assistant or the 'Add Reminder' button.
                                         </p>
                                     </div>
                                 )}
@@ -504,26 +538,6 @@ const DashboardPage: React.FC = () => {
                             )}
                         </>
                     )}
-                </div>
-            </div>
-            
-            <div className="my-8 p-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-accent-dark card-lift">
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="flex-shrink-0 grid grid-cols-4 md:grid-cols-2 gap-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full" title="Google Calendar"><Calendar className="w-6 h-6 text-blue-500" /></div>
-                        <div className="p-3 bg-cyan-100 dark:bg-cyan-900/50 rounded-full" title="Outlook Calendar"><Mail className="w-6 h-6 text-cyan-500" /></div>
-                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-full" title="Facebook Events"><Facebook className="w-6 h-6 text-indigo-600" /></div>
-                        <div className="p-3 bg-pink-100 dark:bg-pink-900/50 rounded-full" title="Instagram"><Instagram className="w-6 h-6 text-pink-500" /></div>
-                    </div>
-                    <div className="text-center md:text-left">
-                        <h2 className="text-xl font-semibold mb-2">Our AI is getting lonely...</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">
-                            Connect your Google, Outlook, and social media accounts so it can make more friends and find more reminders for you.
-                        </p>
-                        <ReactRouterDOM.NavLink to="/settings" className="bg-primary text-white font-bold py-2 px-5 rounded-md hover:bg-primary-dark transition-colors">
-                            Connect Accounts
-                        </ReactRouterDOM.NavLink>
-                    </div>
                 </div>
             </div>
         </div>

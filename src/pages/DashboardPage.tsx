@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import { useAuth } from '../hooks/useAuthContext';
@@ -8,11 +9,13 @@ import Toast from '../components/Toast';
 import EditReminderModal from '../components/EditReminderModal';
 import CompletionPromptModal from '../components/CompletionPromptModal';
 import VendorModal from '../components/VendorModal';
-import HolidayImportModal from '../components/HolidayImportModal';
 import { Reminder, VendorProductCartItem, CartItemType, VendorSuggestion } from '../types';
 import { ChevronLeft, ChevronRight, Zap, PlusCircle, XCircle, Calendar, DownloadCloud, Utensils, ShoppingCart, Plus } from 'lucide-react';
-import * as ReactRouterDOM from 'react-router-dom';
+// FIX: Switched to named imports for react-router-dom to resolve type errors.
+import { useNavigate } from 'react-router-dom';
 import Spinner from '../components/Spinner';
+// FIX: Add missing import for HolidayImportModal.
+import HolidayImportModal from '../components/HolidayImportModal';
 
 // Helper to get a consistent YYYY-MM-DD key from a date, respecting local timezone.
 const toDateKey = (date: Date) => {
@@ -25,7 +28,7 @@ const toDateKey = (date: Date) => {
 const DashboardPage: React.FC = () => {
     const { reminders, addReminder, addToCart, deleteReminder, updateReminder, completeReminder, reminderTypes, addReminderType, addHolidaysBatch, cartCount } = useAppContext();
     const { currentUser } = useAuth();
-    const navigate = ReactRouterDOM.useNavigate();
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [reminderModalState, setReminderModalState] = useState<{

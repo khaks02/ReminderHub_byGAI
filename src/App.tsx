@@ -1,5 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+// FIX: Switched to named imports for react-router-dom to resolve type errors.
+import { NavLink, useLocation, useNavigate, Routes, Route, Navigate, BrowserRouter } from 'react-router-dom';
 import { AppProvider, useAppContext } from './hooks/useAppContext';
 import { useTheme } from './hooks/useTheme';
 import { AuthProvider, useAuth } from './hooks/useAuthContext';
@@ -28,7 +30,7 @@ interface NavItemProps {
 }
 
 const HeaderNavItem = ({ to, children }: { to: string; children: React.ReactNode }) => (
-  <ReactRouterDOM.NavLink
+  <NavLink
     to={to}
     className={({ isActive }) =>
       `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -39,11 +41,11 @@ const HeaderNavItem = ({ to, children }: { to: string; children: React.ReactNode
     }
   >
     {children}
-  </ReactRouterDOM.NavLink>
+  </NavLink>
 );
 
 const BottomNavItem = ({ to, icon, children }: NavItemProps) => (
-  <ReactRouterDOM.NavLink
+  <NavLink
     to={to}
     end
     className={({ isActive }) =>
@@ -56,17 +58,16 @@ const BottomNavItem = ({ to, icon, children }: NavItemProps) => (
   >
     {icon}
     <span className="mt-1 truncate">{children}</span>
-  </ReactRouterDOM.NavLink>
+  </NavLink>
 );
 
 const HeaderTitle = () => {
-    const location = ReactRouterDOM.useLocation();
+    const location = useLocation();
     const pathSegments = location.pathname.split('/').filter(Boolean);
-    const mainPathSegment = pathSegments[0] || ''; // Use empty string to explicitly represent the root path
+    const mainPathSegment = pathSegments[0] || 'dashboard';
     
     const titleMapping: { [key: string]: string } = {
-        '': "Dashboard", // Map root path to Dashboard
-        dashboard: "Dashboard", // Explicit dashboard path
+        dashboard: "Dashboard",
         recipes: "Today's Recipes",
         settings: 'Settings',
         cart: 'Shopping Cart',
@@ -75,32 +76,32 @@ const HeaderTitle = () => {
         analytics: 'Analytics',
     };
 
-    const title = titleMapping[mainPathSegment] || (mainPathSegment ? mainPathSegment.charAt(0).toUpperCase() + mainPathSegment.slice(1) : 'myreminder');
+    const title = titleMapping[mainPathSegment] || 'myreminder';
     
     return <h1 className="text-xl font-semibold text-content-light dark:text-content-dark">{title}</h1>;
 };
 
 
 const MainAppLayout = () => {
-  // Helper component for user menu items
-  const UserMenuItem = ({ to, icon, children, onClick }: { to: string; icon: React.ReactNode; children: React.ReactNode; onClick?: () => void }) => (
-    <ReactRouterDOM.NavLink
-      to={to}
-      onClick={onClick ? () => { setIsUserMenuOpen(false); onClick(); } : () => setIsUserMenuOpen(false)}
-      className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-    >
-      {icon} {children}
-    </ReactRouterDOM.NavLink>
-  );
-
   const [theme, toggleTheme] = useTheme();
   const { cartCount, preferences, completeOnboarding } = useAppContext();
   const { logout, currentUser } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const navigate = ReactRouterDOM.useNavigate();
+  const navigate = useNavigate();
   
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Helper component for user menu items
+  const UserMenuItem = ({ to, icon, children, onClick }: { to: string; icon: React.ReactNode; children: React.ReactNode; onClick?: () => void }) => (
+    <NavLink
+      to={to}
+      onClick={onClick ? () => { setIsUserMenuOpen(false); onClick(); } : () => setIsUserMenuOpen(false)}
+      className="flex items-center gap-2 px-4 py-2 text-sm text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+    >
+      {icon} {children}
+    </NavLink>
+  );
 
   useEffect(() => {
     // Show onboarding if preferences are loaded and the tutorial hasn't been completed.
@@ -169,14 +170,14 @@ const MainAppLayout = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    <ReactRouterDOM.NavLink to="/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
+                    <NavLink to="/cart" className="relative p-2 rounded-full hover:bg-gray-500/10 transition-colors">
                         <ShoppingCart />
                         {cartCount > 0 && (
                             <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
                                 {cartCount}
                             </span>
                         )}
-                    </ReactRouterDOM.NavLink>
+                    </NavLink>
 
                      {/* User Menu Dropdown */}
                     <div className="relative" ref={userMenuRef}>
@@ -215,16 +216,16 @@ const MainAppLayout = () => {
             
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto bg-subtle-light/50 dark:bg-subtle-dark/50">
-              <ReactRouterDOM.Routes>
-                <ReactRouterDOM.Route path="/" element={<DashboardPage />} />
-                <ReactRouterDOM.Route path="/recipes" element={<RecipesPage />} />
-                <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
-                <ReactRouterDOM.Route path="/cart" element={<CartPage />} />
-                <ReactRouterDOM.Route path="/orders" element={<OrdersPage />} />
-                <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
-                <ReactRouterDOM.Route path="/analytics" element={<AnalyticsPage />} />
-                <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/" replace />} />
-              </ReactRouterDOM.Routes>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/recipes" element={<RecipesPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/cart" element={<CartPage />} />
+                <Route path="/orders" element={<OrdersPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
             </main>
         </div>
         
@@ -249,9 +250,9 @@ const AppRoutes = () => {
     }
     
     return (
-        <ReactRouterDOM.Routes>
-            <ReactRouterDOM.Route path="/login" element={<LoginPage />} />
-            <ReactRouterDOM.Route 
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route 
                 path="/*"
                 element={
                     <ProtectedRoute>
@@ -261,7 +262,7 @@ const AppRoutes = () => {
                     </ProtectedRoute>
                 }
             />
-        </ReactRouterDOM.Routes>
+        </Routes>
     );
 };
 
@@ -272,11 +273,11 @@ const App = () => {
     }
 
     return (
-        <ReactRouterDOM.HashRouter>
+        <BrowserRouter>
             <AuthProvider>
                 <AppRoutes />
             </AuthProvider>
-        </ReactRouterDOM.HashRouter>
+        </BrowserRouter>
     );
 };
 

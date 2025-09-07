@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+// FIX: Switched to named imports for react-router-dom to resolve type errors.
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuthContext';
 import { Mail, Lock, Eye, EyeOff, User, CheckCircle } from 'lucide-react';
 import Spinner from '../components/Spinner';
@@ -21,8 +22,8 @@ const FacebookIcon = () => (
 
 const LoginPage: React.FC = () => {
     const { login, signup, loading } = useAuth();
-    const navigate = ReactRouterDOM.useNavigate();
-    const location = ReactRouterDOM.useLocation();
+    const navigate = useNavigate();
+    const location = useLocation();
 
     const [isSignUp, setIsSignUp] = useState(false);
     const [fullName, setFullName] = useState('');

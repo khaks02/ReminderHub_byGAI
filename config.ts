@@ -2,10 +2,11 @@
 // To connect to your own Supabase instance, set USE_MOCK_DATA to false and fill in your credentials.
 export const USE_MOCK_DATA = false;
 
-// To connect to a live Supabase backend, set USE_MOCK_DATA to false and fill these in.
-// Hardcoded credentials are used here to resolve runtime errors in the current execution environment which doesn't support import.meta.env.
-export const SUPABASE_URL: string = 'https://slzekgelvrigylhbdrvb.supabase.co';
-export const SUPABASE_ANON_KEY: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsemVrZ2VsdnJpZ3lsaGJkcnZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyNDEwNDQsImV4cCI6MjA3MTgxNzA0NH0.pacfIlDCNE2Sc2SsI-cIWNO3kv_npixNSRjENHwLP0Q';
+// NOTE: Hardcoding credentials is not recommended for production applications.
+// These have been set based on your request to get the application running.
+// For better security, use environment variables as was originally intended.
+export const SUPABASE_URL: string = "https://5HQj7Nm1xu4ixcxBxLsLcQ.supabase.co";
+export const SUPABASE_ANON_KEY: string = "sb_publishable_5HQj7Nm1xu4ixcxBxLsLcQ_8_kxP0WB";
 
 
 /**
@@ -13,5 +14,12 @@ export const SUPABASE_ANON_KEY: string = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e
  * @returns {boolean} True if in mock mode or if Supabase credentials are provided.
  */
 export const isSupabaseConfigured = () => {
-    return USE_MOCK_DATA || (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY');
+    // In mock mode, we don't need Supabase credentials.
+    if (USE_MOCK_DATA) {
+        return true;
+    }
+    // In live mode, ensure both URL and Key are present and not placeholders.
+    const isUrlSet = SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+    const isKeySet = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+    return isUrlSet && isKeySet;
 };

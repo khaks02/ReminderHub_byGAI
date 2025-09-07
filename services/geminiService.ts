@@ -1,13 +1,31 @@
 import { Reminder, Recipe, ActivityRecommendation, DailyRecommendationResponse, Order, VendorSuggestion, CartItemType, FollowUpReminder } from '../types';
 import { USE_MOCK_DATA } from '../config';
 import * as mockDataService from './mockDataService';
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { supabase } from './supabaseClient';
 
 
-// Initialize the Google Gemini AI Client.
-// Per project guidelines, the API key MUST be available in the execution
-// environment as `process.env.API_KEY`.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+/**
+ * Invokes the 'gemini-proxy' Supabase Edge Function to securely call the Gemini API.
+ * @param type The type of operation to perform ('generateContent' or 'generateImages').
+ * @param payload The data to send to the Gemini API.
+ * @returns The result from the Gemini API.
+ */
+const invokeGeminiProxy = async (type: 'generateContent' | 'generateImages', payload: any) => {
+    if (!supabase) throw new Error("Supabase client is not initialized.");
+    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+        body: { type, payload }
+    });
+
+    if (error) {
+         throw new Error(`[GeminiProxy] ${error.message}`);
+    }
+    
+    if (data && data.error) {
+        throw new Error(`[GeminiProxy] ${data.error}`);
+    }
+    return data;
+};
 
 
 /**
@@ -18,11 +36,12 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
  */
 const generateAndParseJson = async (prompt: string, config: any) => {
     try {
-        const response = await ai.models.generateContent({
+        const payload = {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: config,
-        });
+        };
+        const response = await invokeGeminiProxy('generateContent', payload);
 
         const text = response.text;
         if (!text) {
@@ -46,11 +65,12 @@ const generateAndParseJson = async (prompt: string, config: any) => {
  */
 const generateText = async (prompt: string, config: any = {}) => {
     try {
-        const response = await ai.models.generateContent({
+        const payload = {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: config,
-        });
+        };
+        const response = await invokeGeminiProxy('generateContent', payload);
         return response.text;
     } catch (error) {
         console.error("[GeminiService] AI text generation failed:", error);
@@ -156,11 +176,12 @@ const PLACEHOLDER_IMAGE_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDo
 
 const generateProductImage = async (productName: string): Promise<string> => {
     try {
-        const response = await ai.models.generateImages({
+        const payload = {
             model: 'imagen-4.0-generate-001',
             prompt: `A professional, clean product photograph of "${productName}" for an e-commerce website, on a plain white background.`,
             config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
-        });
+        };
+        const response = await invokeGeminiProxy('generateImages', payload);
         const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
         return base64ImageBytes ? `data:image/jpeg;base64,${base64ImageBytes}` : PLACEHOLDER_IMAGE_URL;
     } catch (error) {
